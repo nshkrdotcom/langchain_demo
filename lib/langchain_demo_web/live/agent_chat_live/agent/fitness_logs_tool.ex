@@ -117,7 +117,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Agent.FitnessLogsTool do
   @spec execute_create_fitness_log(args :: %{String.t() => any()}, context :: map()) :: String.t()
   def execute_create_fitness_log(
         %{} = args,
-        %{live_view_pid: pid, current_user: user} = _context
+        %{live_view_pid: _pid, current_user: user} = _context
       ) do
     # Use the context for the current_user
     case FitnessLogs.create_fitness_log(user.id, args) do

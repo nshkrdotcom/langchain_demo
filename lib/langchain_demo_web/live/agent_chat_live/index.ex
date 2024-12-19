@@ -5,8 +5,8 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   alias LangChainDemoWeb.AgentChatLive.Agent.ChatMessage
   alias LangChain.Chains.LLMChain
   alias LangChain.Message
-  alias LangChain.Message.ToolCall
-  alias LangChain.Message.ToolResult
+#  alias LangChain.Message.ToolCall
+#  alias LangChain.Message.ToolResult
   alias LangChain.ChatModels.ChatOpenAI
   alias LangChain.PromptTemplate
   alias LangChainDemoWeb.AgentChatLive.Agent.UpdateCurrentUserFunction
