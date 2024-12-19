@@ -45,7 +45,7 @@ defmodule LangChainDemo.MixProject do
       {:tailwind, "~> 0.2.0", runtime: Mix.env() == :dev},
       {:swoosh, "~> 1.3"},
       # {:finch, "~> 0.16"},
-      {:langchain, "~> 0.2.0"},
+      {:langchain, "~> 0.3.0-rc.1"},
       {:finch, github: "sneako/finch", override: true},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
@@ -56,8 +56,7 @@ defmodule LangChainDemo.MixProject do
       # {:req, "~> 0.3"},
       {:yaml_elixir, "~> 2.9.0"},
       # timezone database
-      {:tzdata, "~> 1.1"},
-      {:abacus, "~> 2.0.0"}
+      {:tzdata, "~> 1.1"}
     ]
   end
 
