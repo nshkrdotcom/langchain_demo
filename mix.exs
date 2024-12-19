@@ -54,7 +54,7 @@ defmodule LangChainDemo.MixProject do
       {:plug_cowboy, "~> 2.5"},
       {:earmark, "~> 1.4"},
       # {:req, "~> 0.3"},
-      {:yaml_elixir, "~> 2.9.0"},
+      {:yaml_elixir, "~> 2.11.0"},
       # timezone database
       {:tzdata, "~> 1.1"}
     ]
