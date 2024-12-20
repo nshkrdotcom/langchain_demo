@@ -122,15 +122,15 @@ defmodule LangChainDemoWeb.ConversationLive.Show do
   @doc """
   Handle the async result of the running_llm async function.
   """
-  def handle_async(:running_llm, {:ok, :ok = _success_result}, socket) do
-    # discard the result of the successful async function. The side-effects are
-    # what we want.
-    socket =
-      socket
-      |> assign(:async_result, AsyncResult.ok(%AsyncResult{}, :ok))
+  # def handle_async(:running_llm, {:ok, :ok = _success_result}, socket) do
+  #   # discard the result of the successful async function. The side-effects are
+  #   # what we want.
+  #   socket =
+  #     socket
+  #     |> assign(:async_result, AsyncResult.ok(%AsyncResult{}, :ok))
 
-    {:noreply, socket}
-  end
+  #   {:noreply, socket}
+  # end
 
   # Handles async function returning an error as a result
   def handle_async(:running_llm, {:ok, {:error, reason}}, socket) do

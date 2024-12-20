@@ -72,7 +72,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   end
 
   # Browser hook sent up the user's timezone.
-  @impl true
+  #@impl true
   def handle_event("browser-timezone", %{"timezone" => timezone}, socket) do
     # check user's settings. If timezone is different from settings, update it
     # on the user.
@@ -87,6 +87,15 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
       else
         socket
       end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("retry", _, socket) do
+    socket =
+      socket
+      |> assign(:async_result, %AsyncResult{})
+      |> run_chain()
 
     {:noreply, socket}
   end
@@ -158,22 +167,27 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   @doc """
   Handles async function returning a successful result
   """
-  def handle_async(:running_llm, {:ok, :ok = _success_result}, socket) do
-    # discard the result of the successful async function. The side-effects are
-    # what we want.
+  # handles async function returning an error as a result
+  def handle_async(:running_llm, {:ok, {:error, {error, stacktrace}}}, socket) do
+    IO.inspect(error, label: "Error details", limit: :infinity)
+    IO.inspect(stacktrace, label: "Full stacktrace", limit: :infinity)
     socket =
       socket
-      |> assign(:async_result, AsyncResult.ok(%AsyncResult{}, :ok))
+      |> assign(:llm_chain, assign_llm_chain(socket))
+      |> put_flash(:error, inspect(error))
+      |> assign(:async_result, AsyncResult.failed(%AsyncResult{}, error))
 
     {:noreply, socket}
   end
 
-  # handles async function returning an error as a result
-  def handle_async(:running_llm, {:ok, {:error, reason}}, socket) do
+  # handles async function returning a successful result
+  def handle_async(:running_llm, {:ok, updated_chain}, socket) do
+    # discard the result of the successful async function. The side-effects are
+    # what we want.
     socket =
       socket
-      |> put_flash(:error, reason)
-      |> assign(:async_result, AsyncResult.failed(%AsyncResult{}, reason))
+      |> assign(:llm_chain, updated_chain)
+      |> assign(:async_result, AsyncResult.ok(%AsyncResult{}, :ok))
 
     {:noreply, socket}
   end
@@ -283,8 +297,8 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
         },
         verbose: false
       })
-      |> LLMChain.add_tools(UpdateCurrentUserFunction.new!())
-      |> LLMChain.add_tools(FitnessLogsTool.new_functions!())
+      #|> LLMChain.add_tools(UpdateCurrentUserFunction.new!())
+      ####|> LLMChain.add_tools(FitnessLogsTool.new_functions!())
       |> LLMChain.add_message(Message.new_system!(~S|
 You are a helpful American virtual personal strength trainer. Your name is "Max". Limit discussions
 to ONLY discuss the user's fitness programs and fitness goals. You speak in a natural, casual and conversational tone.
@@ -322,70 +336,62 @@ Before modifying the user's training program, summarize the change and confirm t
     live_view_pid = self()
 
     callback_fn = fn
-      %LangChain.MessageDelta{} = delta ->
-        try do
-          send(live_view_pid, {:chat_delta, delta})
-        catch
-          e, stacktrace ->
-            IO.inspect("Error in callback_fn for MessageDelta", limit: :infinity)
-            IO.inspect(e, label: "Error", limit: :infinity)
-            IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
+      delta when is_map(delta) ->
+        case Map.fetch(delta, :content) do
+          {:ok, _content} ->
+            IO.inspect(delta, label: "Valid delta in callback_fn", limit: :infinity)
+            send(live_view_pid, {:chat_delta, delta})
+
+          :error ->
+            IO.inspect(delta, label: "Invalid delta - missing :content", limit: :infinity)
+            # Optionally send an error message to the LiveView
         end
 
-      %LangChain.Message{role: :tool} = message ->
-        try do
-          send(live_view_pid, {:tool_executed, message})
-        catch
-          e, stacktrace ->
-            IO.inspect("Error in callback_fn for Message (tool)", limit: :infinity)
-            IO.inspect(e, label: "Error", limit: :infinity)
-            IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
+      %{role: :tool} = message ->
+        case Map.fetch(message, :tool_calls) do
+          {:ok, _tool_calls} ->
+            IO.inspect(message, label: "Valid tool message in callback_fn", limit: :infinity)
+            send(live_view_pid, {:tool_executed, message})
+
+          :error ->
+            IO.inspect(message, label: "Invalid tool message - missing :tool_calls", limit: :infinity)
+            # Optionally send an error message to the LiveView
         end
 
-      %LangChain.Message{} = _message ->
-        try do
-          :ok
-        catch
-          e, stacktrace ->
-            IO.inspect("Error in callback_fn for Message (other)", limit: :infinity)
-            IO.inspect(e, label: "Error", limit: :infinity)
-            IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
-        end
+      message ->
+        IO.inspect(message, label: "Other message in callback_fn", limit: :infinity)
+        :ok
     end
+
+    chain = chain |> LLMChain.add_callback(callback_fn)
 
     socket
     |> assign(:async_result, AsyncResult.loading())
     |> start_async(:running_llm, fn ->
       try do
-        case LLMChain.run(chain, while_needs_response: true, callback_fn: callback_fn) do
-          # Don't return a large success result. Callbacks return what we want.
-          {:ok, _updated_chain, _last_message} ->
-            :ok
+        result = LLMChain.run(chain, while_needs_response: true)
+        IO.inspect(result, label: "Raw result from LLMChain.run", limit: :infinity)
+          case result do
+            # Callbacks modify the chain and return it.
+            {:ok, updated_chain, _last_message} ->
+            {:ok, updated_chain}
 
-          # return the errors for display
-          {:error, reason} ->
+             # return the errors for display
+            {:error, reason} ->
             {:error, reason}
-        end
+          end
       catch
         # Handle different error types if needed
-        CaseClauseError, stacktrace ->
-          IO.inspect("CaseClauseError caught in LLMChain.run within start_async",
-            limit: :infinity
-          )
-          IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
-          # Re-raise the error if you want it to terminate the process, or handle it gracefully
-          {:error, %CaseClauseError{}} # Convert to an error tuple
-
-        # Catch-all for other errors
         e, stacktrace ->
           IO.inspect("Error caught in LLMChain.run within start_async", limit: :infinity)
           IO.inspect(e, label: "Error", limit: :infinity)
           IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
           # Re-raise or handle gracefully
-          {:error, e} # Convert to an error tuple
+          {:error, {e, stacktrace}} # Convert to an error tuple
       end
     end)
   end
+
 
   defp reset_chat_message_form(socket) do
     changeset = ChatMessage.create_changeset(%{})
