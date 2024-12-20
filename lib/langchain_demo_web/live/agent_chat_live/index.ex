@@ -1,5 +1,6 @@
 defmodule LangChainDemoWeb.AgentChatLive.Index do
   use LangChainDemoWeb, :live_view
+  require Logger
 
   alias Phoenix.LiveView.AsyncResult
   alias LangChainDemoWeb.AgentChatLive.Agent.ChatMessage
@@ -110,64 +111,77 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
 
   @impl true
   def handle_info({:chat_delta, %LangChain.MessageDelta{} = delta}, socket) do
-    # This is where LLM generated content gets processed and merged to the
-    # LLMChain managed by the state in this LiveView process.
-    # Apply the delta message to our tracked LLMChain. If it completes the
-    # message, display the message
-    updated_chain = LLMChain.apply_delta(socket.assigns.llm_chain, delta)
-    # if this completed the delta, create the message and track on the chain
-    socket =
-      if updated_chain.delta == nil do
-        # the delta completed the message. Examine the last message
-        message = updated_chain.last_message
+    try do
+      updated_chain = LLMChain.apply_delta(socket.assigns.llm_chain, delta)
+      
+      socket =
+        if updated_chain.delta == nil do
+          message = updated_chain.last_message
+          append_display_message(socket, %ChatMessage{
+            role: message.role,
+            content: message.content,
+            tool_calls: message.tool_calls,
+            tool_results: message.tool_results
+          })
+        else
+          socket
+        end
 
-        append_display_message(socket, %ChatMessage{
-          role: message.role,
-          content: message.content,
-          tool_calls: message.tool_calls,
-          tool_results: message.tool_results
-        })
-      else
-        socket
-      end
-
-    {:noreply, assign(socket, :llm_chain, updated_chain)}
+      {:noreply, assign(socket, :llm_chain, updated_chain)}
+    catch
+      error, stacktrace ->
+        Logger.error("Error processing chat delta: #{inspect(error)}\nStacktrace: #{inspect(stacktrace)}")
+        {:noreply, put_flash(socket, :error, "Failed to process chat message")}
+    end
   end
 
   def handle_info({:tool_executed, tool_message}, socket) do
-    message = %ChatMessage{
-      role: tool_message.role,
-      hidden: false,
-      content: nil,
-      tool_results: tool_message.tool_results
-    }
+    try do
+      message = %ChatMessage{
+        role: tool_message.role,
+        hidden: false,
+        content: nil,
+        tool_results: tool_message.tool_results
+      }
 
-    socket =
-      socket
-      |> assign(:llm_chain, LLMChain.add_message(socket.assigns.llm_chain, tool_message))
-      |> append_display_message(message)
+      socket =
+        socket
+        |> assign(:llm_chain, LLMChain.add_message(socket.assigns.llm_chain, tool_message))
+        |> append_display_message(message)
 
-    {:noreply, socket}
+      {:noreply, socket}
+    catch
+      error, stacktrace ->
+        Logger.error("Error processing tool message: #{inspect(error)}\nStacktrace: #{inspect(stacktrace)}")
+        {:noreply, put_flash(socket, :error, "Failed to process tool response")}
+    end
   end
 
   def handle_info({:updated_current_user, updated_user}, socket) do
-    socket =
-      socket
-      |> assign(:current_user, updated_user)
-      |> assign(
-        :llm_chain,
-        LLMChain.update_custom_context(socket.assigns.llm_chain, %{current_user: updated_user})
-      )
+    try do
+      socket =
+        socket
+        |> assign(:current_user, updated_user)
+        |> assign(
+          :llm_chain,
+          LLMChain.update_custom_context(socket.assigns.llm_chain, %{current_user: updated_user})
+        )
 
-    {:noreply, socket}
+      {:noreply, socket}
+    catch
+      error, stacktrace ->
+        Logger.error("Error updating user context: #{inspect(error)}\nStacktrace: #{inspect(stacktrace)}")
+        {:noreply, put_flash(socket, :error, "Failed to update user information")}
+    end
   end
 
   def handle_info({:task_error, reason}, socket) do
-    socket = put_flash(socket, :error, "Error with chat. Reason: #{inspect(reason)}")
-    {:noreply, socket}
+    Logger.error("Task error: #{inspect(reason)}")
+    {:noreply, put_flash(socket, :error, "Error with chat: #{format_error_message(reason)}")}
   end
 
-  def handle_info(_, socket) do
+  def handle_info(msg, socket) do
+    Logger.debug("Unhandled message received: #{inspect(msg)}")
     {:noreply, socket}
   end
 
@@ -175,37 +189,33 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   @doc """
   Handles async function returning a successful result
   """
-  def handle_async(:running_llm, {:ok, :ok = _success_result}, socket) do
-    # discard the result of the successful async function. The side-effects are
-    # what we want.
-    socket =
-      socket
-      |> assign(:async_result, AsyncResult.ok(%AsyncResult{}, :ok))
-
-    {:noreply, socket}
+  def handle_async(:running_llm, {:ok, :ok}, socket) do
+    {:noreply, assign(socket, :async_result, AsyncResult.ok(%AsyncResult{}, :ok))}
   end
 
-  # handles async function returning an error as a result
   def handle_async(:running_llm, {:ok, {:error, reason}}, socket) do
+    error_message = format_error_message(reason)
+    Logger.error("LLM chain error: #{error_message}")
+    
     socket =
       socket
-      |> put_flash(:error, reason)
+      |> put_flash(:error, error_message)
       |> assign(:async_result, AsyncResult.failed(%AsyncResult{}, reason))
 
     {:noreply, socket}
   end
 
-  # handles async function exploding
   def handle_async(:running_llm, {:exit, reason}, socket) do
+    error_message = "Chat service error: #{format_error_message(reason)}"
+    Logger.error(error_message)
+    
     socket =
       socket
-      |> put_flash(:error, "Call failed: #{inspect(reason)}")
-      |> assign(:async_result, %AsyncResult{})
+      |> put_flash(:error, error_message)
+      |> assign(:async_result, AsyncResult.failed(%AsyncResult{}, reason))
 
-    # when in verbose mode, log more details
     if socket.assigns.show_detailed_errors do
-      IO.inspect("Error caught in LLMChain.run within start_async", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-      IO.inspect(reason, label: "Reason", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+      Logger.debug("Detailed error information: #{inspect(reason)}")
     end
 
     {:noreply, socket}
@@ -375,24 +385,22 @@ Before modifying the user's training program, summarize the change and confirm t
             try do
               send(live_view_pid, {:chat_delta, delta})
             catch
-              e, stacktrace ->
-                IO.inspect("Error in on_llm_new_delta", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                IO.inspect(e, label: "Error", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                IO.inspect(stacktrace, label: "Stacktrace", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+              error, stacktrace ->
+                Logger.error("Error in on_llm_new_delta: #{inspect(error)}\nStacktrace: #{inspect(stacktrace)}")
+                {:error, "Failed to process chat message"}
             end
           end,
           on_llm_token_usage: fn _model, usage ->
-            IO.inspect(usage)
+            Logger.debug("Token usage: #{inspect(usage)}")
             :ok
           end,
           on_llm_new_message: fn _model, message ->
             try do
               send(live_view_pid, {:tool_executed, message})
             catch
-              e, stacktrace ->
-                IO.inspect("Error in on_llm_new_message", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                IO.inspect(e, label: "Error", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                IO.inspect(stacktrace, label: "Stacktrace", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+              error, stacktrace ->
+                Logger.error("Error in on_llm_new_message: #{inspect(error)}\nStacktrace: #{inspect(stacktrace)}")
+                {:error, "Failed to process tool message"}
             end
           end
         })
@@ -403,34 +411,35 @@ Before modifying the user's training program, summarize the change and confirm t
     |> start_async(:running_llm, fn ->
       try do
         case LLMChain.run(chain, while_needs_response: true) do
-          # Don't return a large success result. Callbacks return what we want.
           {:ok, _updated_chain, _last_message} ->
             :ok
 
-          # return the errors for display
+          {:ok, _updated_chain} ->
+            :ok
+
           {:error, reason} ->
-            {:error, reason}
+            Logger.error("LLMChain.run error: #{inspect(reason)}")
+            {:error, format_error_message(reason)}
+
+          unexpected ->
+            Logger.error("Unexpected response from LLMChain.run: #{inspect(unexpected)}")
+            {:error, "Unexpected response from chat service"}
         end
       catch
-        # Handle different error types if needed
-        CaseClauseError, stacktrace ->
-          IO.inspect("CaseClauseError caught in LLMChain.run within start_async",
-            limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity)
-          )
-          IO.inspect(stacktrace, label: "Stacktrace", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-          # Re-raise the error if you want it to terminate the process, or handle it gracefully
-          {:error, %CaseClauseError{}} # Convert to an error tuple
+        :error, %CaseClauseError{} = error ->
+          Logger.error("CaseClauseError in LLMChain.run: #{inspect(error)}")
+          {:error, "Failed to process chat response"}
 
-        # Catch-all for other errors
-        e, stacktrace ->
-          IO.inspect("Error caught in LLMChain.run within start_async", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-          IO.inspect(e, label: "Error", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-          IO.inspect(stacktrace, label: "Stacktrace", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-          # Re-raise or handle gracefully
-          {:error, e} # Convert to an error tuple
+        kind, error ->
+          Logger.error("Unexpected error in LLMChain.run: #{inspect(error)}\nKind: #{inspect(kind)}")
+          {:error, "An unexpected error occurred"}
       end
     end)
   end
+
+  defp format_error_message(reason) when is_binary(reason), do: reason
+  defp format_error_message(reason) when is_atom(reason), do: Atom.to_string(reason)
+  defp format_error_message(reason), do: inspect(reason)
 
   defp reset_chat_message_form(socket) do
     changeset = ChatMessage.create_changeset(%{})
