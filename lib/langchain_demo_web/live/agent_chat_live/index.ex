@@ -15,26 +15,13 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   alias LangChainDemo.FitnessLogs
 
   @impl true
-  def mount(%{"show_detailed_errors" => show_detailed_errors} = _params, _session, socket)
-    when show_detailed_errors in ["true", "false"] do
-    socket =
-      socket
-      # fake current_user setup.
-      # Data expected after `mix ecto.setup` from the `seeds.exs`
-      |> assign(:current_user, FitnessUsers.get_fitness_user!(1))
-      |> assign(:show_detailed_errors, show_detailed_errors == "true")
-
-    {:ok, socket}
-  end
-
-  @impl true
   def mount(_params, _session, socket) do
     socket =
       socket
       # fake current_user setup.
       # Data expected after `mix ecto.setup` from the `seeds.exs`
       |> assign(:current_user, FitnessUsers.get_fitness_user!(1))
-      |> assign(:show_detailed_errors, false)
+
     {:ok, socket}
   end
 
@@ -105,15 +92,26 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
     {:noreply, socket}
   end
 
-  def handle_event("toggle-detailed-errors", _params, socket) do
-    {:noreply, update(socket, :show_detailed_errors, &(!&1))}
-  end
-
   @impl true
   def handle_info({:chat_delta, %LangChain.MessageDelta{} = delta}, socket) do
     Logger.info("Handling chat delta: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     try do
       updated_chain = LLMChain.apply_delta(socket.assigns.llm_chain, delta)
+
+      # Only update the display if the delta completes a message
+      socket =
+        if updated_chain.delta == nil do
+          message = updated_chain.last_message
+          append_display_message(socket, %ChatMessage{
+            role: message.role,
+            content: message.content,
+            tool_calls: message.tool_calls,
+            tool_results: message.tool_results
+          })
+        else
+          socket
+        end
+
       {:noreply, assign(socket, :llm_chain, updated_chain)}
     catch
       error, stacktrace ->
@@ -178,8 +176,14 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   @doc """
   Handles async function returning a successful result
   """
-  def handle_async(:running_llm, {:ok, :ok}, socket) do
-    {:noreply, assign(socket, :async_result, AsyncResult.ok(%AsyncResult{}, :ok))}
+  def handle_async(:running_llm, {:ok, :ok = _success_result}, socket) do
+    # discard the result of the successful async function. The side-effects are
+    # what we want.
+    socket =
+      socket
+      |> assign(:async_result, AsyncResult.ok(%AsyncResult{}, :ok))
+
+    {:noreply, socket}
   end
 
   def handle_async(:running_llm, {:ok, {:error, reason}}, socket) do
@@ -202,10 +206,6 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
       socket
       |> put_flash(:error, error_message)
       |> assign(:async_result, AsyncResult.failed(%AsyncResult{}, reason))
-
-    if socket.assigns.show_detailed_errors do
-      Logger.debug("Detailed error information: #{inspect(reason)}")
-    end
 
     {:noreply, socket}
   end
@@ -417,6 +417,7 @@ Before modifying the user's training program, summarize the change and confirm t
   defp format_error_message(reason), do: inspect(reason)
 
   defp reset_chat_message_form(socket) do
+    # Logger.info("resetting chat mssage form!!***********************")
     changeset = ChatMessage.create_changeset(%{})
     assign_form(socket, changeset)
   end

@@ -26,6 +26,6 @@ defmodule LangchainDemo.LoggerFormatter do
           message
       end
 
-    "#{formatted_timestamp} #{message}"
+    "#{formatted_timestamp} #{message}\n"
   end
 end
