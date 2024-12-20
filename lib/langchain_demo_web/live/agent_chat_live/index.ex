@@ -5,8 +5,8 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   alias LangChainDemoWeb.AgentChatLive.Agent.ChatMessage
   alias LangChain.Chains.LLMChain
   alias LangChain.Message
-  alias LangChain.ChatModels.ChatOpenAI
-  #alias LangChain.ChatModels.ChatGoogleAI
+  #alias LangChain.ChatModels.ChatOpenAI
+  alias LangChain.ChatModels.ChatGoogleAI
   alias LangChain.PromptTemplate
   alias LangChainDemoWeb.AgentChatLive.Agent.UpdateCurrentUserFunction
   alias LangChainDemoWeb.AgentChatLive.Agent.FitnessLogsTool
@@ -284,8 +284,10 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
       LLMChain.new!(%{
         llm:
 
-          ChatOpenAI.new!(%{
-            model: "gpt-4",
+          #ChatOpenAI.new!(%{
+          ChatGoogleAI.new!(%{
+            #model: "gpt-4",
+            model: "gemini-1.5-flash-8b",
             # don't get creative with answers
             temperature: 0,
             request_timeout: 60_000,
