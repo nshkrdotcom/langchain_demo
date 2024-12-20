@@ -20,6 +20,9 @@ config :langchain_demo, LangChainDemoWeb.Endpoint,
   pubsub_server: LangChainDemo.PubSub,
   live_view: [signing_salt: "Z2RBy4NU"]
 
+# Configure a global setting for IO.inspect limit
+config :langchain_demo, :io_inspect_limit, 8 # :infinity
+
 # Configures the mailer
 #
 # By default it uses the "Local" adapter which stores the emails

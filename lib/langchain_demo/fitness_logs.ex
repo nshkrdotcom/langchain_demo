@@ -54,8 +54,8 @@ defmodule LangChainDemo.FitnessLogs do
       case Repo.all(run_query) do
         {:error, reason} ->
           # Handle database errors
-          IO.inspect("Database error in list_fitness_logs", limit: :infinity)
-          IO.inspect(reason, label: "Reason", limit: :infinity)
+          IO.inspect("Database error in list_fitness_logs", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+          IO.inspect(reason, label: "Reason", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
           {:error, "Failed to retrieve fitness logs"}
 
         logs ->
@@ -63,9 +63,9 @@ defmodule LangChainDemo.FitnessLogs do
       end
     catch
       e, stacktrace ->
-        IO.inspect("Exception in list_fitness_logs", limit: :infinity)
-        IO.inspect(e, label: "Error", limit: :infinity)
-        IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
+        IO.inspect("Exception in list_fitness_logs", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+        IO.inspect(e, label: "Error", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+        IO.inspect(stacktrace, label: "Stacktrace", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
         # Provide a more specific error message if possible
         case e do
           %ArgumentError{message: message} ->
