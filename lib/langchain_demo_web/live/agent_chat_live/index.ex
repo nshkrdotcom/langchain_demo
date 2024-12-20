@@ -211,48 +211,65 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
     {:noreply, socket}
   end
 
-  def handle_async(:get_fitness_data, {:ok, current_workout_data}, socket) do
-    current_workout_data =
-    try do
-      Jason.encode(current_workout_data)
-    catch
-      _e, _stacktrace ->
-      "[]"
-    end
-    updated_chain =
-      socket.assigns.llm_chain
-      |> LLMChain.add_message(
-        PromptTemplate.to_message!(
-          PromptTemplate.from_template!(~S|
-      Today is <%= @today %>
+  defp assign_form(socket, %Ecto.Changeset{} = changeset) do
+    assign(socket, :form, to_form(changeset))
+  end
 
-      Current account information in JSON format:
-      <%= @current_user_json %>
-
-      Do an accountability follow-up with me on my previous workouts. When no previous workout information is available, help me get started.
-
-      Today's workout information in JSON format:
-      <%= @current_workout_json %>
-
-      User says:
-      <%= @user_text %>|), %{
-          current_user_json: socket.assigns.current_user_json,
-          current_workout_json: current_workout_data,
-          today: socket.assigns.today |> Calendar.strftime("%A, %Y-%m-%d"),
-          user_text: socket.assigns.user_text
-        })
+  # if this is the FIRST user message, use a prompt template to include some
+  # initial hidden instructions. We detect if it's the first by matching on the
+  # last_messaging being the "system" message.
+  def add_user_message(
+        %{assigns: %{llm_chain: %LLMChain{last_message: %Message{role: :system}} = llm_chain}} =
+          socket,
+        user_text
       )
+      when is_binary(user_text) do
+    current_user = socket.assigns.current_user
+    today = DateTime.now!(current_user.timezone)
 
-    socket
-    |> assign(llm_chain: updated_chain)
-    # display what the user said, but not what we sent.
-    |> append_display_message(%ChatMessage{role: :user, content: socket.assigns.user_text})
-    |> assign(:async_result, %AsyncResult{})
-    |> run_chain()
-   {:noreply, socket}
-end
+    current_user_template =
+      PromptTemplate.from_template!(~S|
+  Today is <%= @today %>
 
-  # the first user message
+  Current account information in JSON format:
+  <%= @current_user_json %>
+
+  Do an accountability follow-up with me on my previous workouts. When no previous workout information is available, help me get started.
+
+  Today's workout information in JSON format:
+  <%= @current_workout_json %>
+
+  User says:
+  <%= @user_text %>|)
+
+    with {:ok, current_user_json} <- Jason.encode(current_user),
+        {:ok, current_workout_json} <-
+          FitnessLogs.list_fitness_logs(current_user.id, days: 0)
+          |> Jason.encode() do
+      updated_chain =
+        llm_chain
+        |> LLMChain.add_message(
+          PromptTemplate.to_message!(current_user_template, %{
+            current_user_json: current_user_json,
+            current_workout_json: current_workout_json,
+            today: today |> Calendar.strftime("%A, %Y-%m-%d"),
+            user_text: user_text
+          })
+        )
+
+      socket
+      |> assign(llm_chain: updated_chain)
+      # display what the user said, but not what we sent.
+      |> append_display_message(%ChatMessage{role: :user, content: user_text})
+    else
+      error ->
+        IO.inspect("Error encoding data for prompt template", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+        IO.inspect(error, label: "Error", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+        # Handle the error, maybe by using default values or sending an error message
+        socket
+    end
+  end
+
   def add_user_message(socket, user_text) when is_binary(user_text) do
     # NOT the first message. Submit the user's text as-is.
     updated_chain = LLMChain.add_message(socket.assigns.llm_chain, Message.new_user!(user_text))
@@ -267,22 +284,43 @@ end
       LLMChain.new!(%{
         llm:
 
-          # ChatOpenAI.new!(%{
-          #   model: "gpt-4",
-          #   # don't get creative with answers
-          #   temperature: 0,
-          #   request_timeout: 60_000,
-          #   stream: true,
-          #   api_key: Application.get_env(:langchain, :openai_key).()
-          # }),
-
+          #ChatOpenAI.new!(%{
           ChatGoogleAI.new!(%{
+            #model: "gpt-4",
             model: "gemini-1.5-flash-8b",
             # don't get creative with answers
             temperature: 0,
             request_timeout: 60_000,
             stream: true,
-            api_key: Application.get_env(:langchain, :google_ai_key).()
+            api_key: Application.get_env(:langchain, :google_ai_key).(),
+             callbacks: [
+               %{
+                 on_llm_new_delta: fn _model, delta ->
+                      try do
+                        send(self(), {:chat_delta, delta})
+                      catch
+                        e, stacktrace ->
+                          IO.inspect("Error in on_llm_new_delta", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+                          IO.inspect(e, label: "Error", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+                          IO.inspect(stacktrace, label: "Stacktrace", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+                      end
+                  end,
+                 on_llm_token_usage: fn _model, usage ->
+                  IO.inspect(usage)
+                   :ok
+                 end,
+                 on_llm_new_message: fn _model, message ->
+                    try do
+                      send(self(), {:tool_executed, message})
+                    catch
+                      e, stacktrace ->
+                        IO.inspect("Error in on_llm_new_message", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+                        IO.inspect(e, label: "Error", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+                        IO.inspect(stacktrace, label: "Stacktrace", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
+                    end
+                 end
+               }
+             ]
           }),
         custom_context: %{
           live_view_pid: self(),
@@ -322,66 +360,6 @@ Before modifying the user's training program, summarize the change and confirm t
 
     socket
     |> assign(:llm_chain, llm_chain)
-  end
-
-  # if this is the FIRST user message, use a prompt template to include some
-  # initial hidden instructions. We detect if it's the first by matching on the
-  # last_messaging being the "system" message.
-  def add_user_message(
-        %{assigns: %{llm_chain: %LLMChain{last_message: %Message{role: :system}} = llm_chain}} =
-          socket,
-        user_text
-      )
-      when is_binary(user_text) do
-    current_user = socket.assigns.current_user
-    today = DateTime.now!(current_user.timezone)
-    live_view_pid = self()
-
-    current_user_template =
-      PromptTemplate.from_template!(~S|
-  Today is <%= @today %>
-
-  Current account information in JSON format:
-  <%= @current_user_json %>
-
-  Do an accountability follow-up with me on my previous workouts. When no previous workout information is available, help me get started.
-
-  Today's workout information in JSON format:
-  <%= @current_workout_json %>
-
-  User says:
-  <%= @user_text %>|)
-
-    socket =
-    socket
-    |> assign(:async_result, AsyncResult.loading())
-    |> start_async(:get_fitness_data, fn ->
-      try do
-        FitnessLogs.list_fitness_logs(current_user.id, days: 0)
-      catch
-          e, stacktrace ->
-            IO.inspect("Error in FitnessLogs.list_fitness_logs within start_async",
-            limit: :infinity
-          )
-          IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
-          # Re-raise the error if you want it to terminate the process, or handle it gracefully
-          {:error, %ArgumentError{message: message}}
-       end
-    end)
-
-    with {:ok, current_user_json} <- Jason.encode(current_user) do
-        socket
-      |> assign(user_text: user_text)
-      |> assign(llm_chain: llm_chain)
-      |> assign(current_user_json: current_user_json)
-      |> assign(today: today)
-    else
-      error ->
-        IO.inspect("Error encoding data for prompt template", limit: :infinity)
-        IO.inspect(error, label: "Error", limit: :infinity)
-        # Handle the error, maybe by using default values or sending an error message
-        socket
-    end
   end
 
   def run_chain(socket) do
@@ -462,10 +440,4 @@ Before modifying the user's training program, summarize the change and confirm t
   defp append_display_message(socket, %ChatMessage{} = message) do
     assign(socket, :display_messages, socket.assigns.display_messages ++ [message])
   end
-
-
-  defp assign_form(socket, %Ecto.Changeset{} = changeset) do
-    assign(socket, :form, to_form(changeset))
-  end
-
 end
