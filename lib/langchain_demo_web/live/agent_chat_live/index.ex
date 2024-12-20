@@ -111,22 +111,9 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
 
   @impl true
   def handle_info({:chat_delta, %LangChain.MessageDelta{} = delta}, socket) do
+    Logger.info("Handling chat delta: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     try do
       updated_chain = LLMChain.apply_delta(socket.assigns.llm_chain, delta)
-      
-      socket =
-        if updated_chain.delta == nil do
-          message = updated_chain.last_message
-          append_display_message(socket, %ChatMessage{
-            role: message.role,
-            content: message.content,
-            tool_calls: message.tool_calls,
-            tool_results: message.tool_results
-          })
-        else
-          socket
-        end
-
       {:noreply, assign(socket, :llm_chain, updated_chain)}
     catch
       error, stacktrace ->
@@ -136,13 +123,15 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   end
 
   def handle_info({:tool_executed, tool_message}, socket) do
+    Logger.info("Handling tool message: #{inspect(tool_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     try do
       message = %ChatMessage{
         role: tool_message.role,
-        hidden: false,
-        content: nil,
+        content: tool_message.content,
+        tool_calls: tool_message.tool_calls,
         tool_results: tool_message.tool_results
       }
+      Logger.info("Created chat message: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
 
       socket =
         socket
@@ -196,7 +185,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   def handle_async(:running_llm, {:ok, {:error, reason}}, socket) do
     error_message = format_error_message(reason)
     Logger.error("LLM chain error: #{error_message}")
-    
+
     socket =
       socket
       |> put_flash(:error, error_message)
@@ -208,7 +197,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   def handle_async(:running_llm, {:exit, reason}, socket) do
     error_message = "Chat service error: #{format_error_message(reason)}"
     Logger.error(error_message)
-    
+
     socket =
       socket
       |> put_flash(:error, error_message)
@@ -376,32 +365,26 @@ Before modifying the user's training program, summarize the change and confirm t
     chain = socket.assigns.llm_chain
     live_view_pid = self()
 
+    Logger.info("Starting LLMChain.run...")
+
     socket =
       socket
       |> assign(
         :llm_chain,
         LLMChain.add_llm_callback(socket.assigns.llm_chain, %{
           on_llm_new_delta: fn _model, delta ->
-            try do
-              send(live_view_pid, {:chat_delta, delta})
-            catch
-              error, stacktrace ->
-                Logger.error("Error in on_llm_new_delta: #{inspect(error)}\nStacktrace: #{inspect(stacktrace)}")
-                {:error, "Failed to process chat message"}
-            end
+            Logger.info("DELTA RECEIVED: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+            send(live_view_pid, {:chat_delta, delta})
+            :ok
           end,
           on_llm_token_usage: fn _model, usage ->
-            Logger.debug("Token usage: #{inspect(usage)}")
+            Logger.info("TOKEN USAGE: #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
             :ok
           end,
           on_llm_new_message: fn _model, message ->
-            try do
-              send(live_view_pid, {:tool_executed, message})
-            catch
-              error, stacktrace ->
-                Logger.error("Error in on_llm_new_message: #{inspect(error)}\nStacktrace: #{inspect(stacktrace)}")
-                {:error, "Failed to process tool message"}
-            end
+            Logger.info("NEW MESSAGE RECEIVED: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+            send(live_view_pid, {:tool_executed, message})
+            :ok
           end
         })
       )
@@ -409,30 +392,22 @@ Before modifying the user's training program, summarize the change and confirm t
     socket
     |> assign(:async_result, AsyncResult.loading())
     |> start_async(:running_llm, fn ->
-      try do
-        case LLMChain.run(chain, while_needs_response: true) do
-          {:ok, _updated_chain, _last_message} ->
-            :ok
+      result = LLMChain.run(chain, while_needs_response: true)
+      Logger.info("LLMChain.run result: #{inspect(result, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
 
-          {:ok, _updated_chain} ->
-            :ok
-
-          {:error, reason} ->
-            Logger.error("LLMChain.run error: #{inspect(reason)}")
-            {:error, format_error_message(reason)}
-
-          unexpected ->
-            Logger.error("Unexpected response from LLMChain.run: #{inspect(unexpected)}")
-            {:error, "Unexpected response from chat service"}
-        end
-      catch
-        :error, %CaseClauseError{} = error ->
-          Logger.error("CaseClauseError in LLMChain.run: #{inspect(error)}")
-          {:error, "Failed to process chat response"}
-
-        kind, error ->
-          Logger.error("Unexpected error in LLMChain.run: #{inspect(error)}\nKind: #{inspect(kind)}")
-          {:error, "An unexpected error occurred"}
+      case result do
+        {:ok, _updated_chain, _last_message} ->
+          Logger.info("Chain completed successfully with message")
+          :ok
+        {:ok, _updated_chain} ->
+          Logger.info("Chain completed successfully without message")
+          :ok
+        {:error, reason} ->
+          Logger.error("Chain error: #{inspect(reason)}")
+          {:error, format_error_message(reason)}
+        unexpected ->
+          Logger.error("Unexpected chain response: #{inspect(unexpected)}")
+          {:error, "Unexpected response from chat service"}
       end
     end)
   end
