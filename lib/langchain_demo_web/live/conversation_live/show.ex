@@ -7,6 +7,7 @@ defmodule LangChainDemoWeb.ConversationLive.Show do
   alias LangChainDemo.Messages
   alias LangChainDemo.Messages.Message
   alias LangChain.ChatModels.ChatOpenAI
+  #alias LangChain.ChatModels.ChatGoogleAI
   alias LangChain.Chains.LLMChain
   alias Phoenix.LiveView.AsyncResult
 

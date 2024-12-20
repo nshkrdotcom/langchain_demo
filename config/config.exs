@@ -53,16 +53,22 @@ config :tailwind,
 
 config :langchain, :openai_key, fn -> System.fetch_env!("OPENAI_API_KEY") end
 
+config :langchain, :google_ai_key, fn -> System.fetch_env!("GOOGLE_API_KEY") end
+
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [:request_id],
+  formatter: {LangchainDemo.LoggerFormatter, :format, []}
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
 # Setup timezone database
 config :elixir, :time_zone_database, Tzdata.TimeZoneDatabase
+
+config :logger,
+  backends: [{Logger.Backends.Console, format: {LangchainDemo.LoggerFormatter, :format}}]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

@@ -5,9 +5,8 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   alias LangChainDemoWeb.AgentChatLive.Agent.ChatMessage
   alias LangChain.Chains.LLMChain
   alias LangChain.Message
-#  alias LangChain.Message.ToolCall
-#  alias LangChain.Message.ToolResult
   alias LangChain.ChatModels.ChatOpenAI
+  #alias LangChain.ChatModels.ChatGoogleAI
   alias LangChain.PromptTemplate
   alias LangChainDemoWeb.AgentChatLive.Agent.UpdateCurrentUserFunction
   alias LangChainDemoWeb.AgentChatLive.Agent.FitnessLogsTool
@@ -73,6 +72,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   end
 
   # Browser hook sent up the user's timezone.
+  @impl true
   def handle_event("browser-timezone", %{"timezone" => timezone}, socket) do
     # check user's settings. If timezone is different from settings, update it
     # on the user.
@@ -95,7 +95,6 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   def handle_info({:chat_delta, %LangChain.MessageDelta{} = delta}, socket) do
     # This is where LLM generated content gets processed and merged to the
     # LLMChain managed by the state in this LiveView process.
-
     # Apply the delta message to our tracked LLMChain. If it completes the
     # message, display the message
     updated_chain = LLMChain.apply_delta(socket.assigns.llm_chain, delta)
@@ -207,35 +206,45 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
 
     current_user_template =
       PromptTemplate.from_template!(~S|
-Today is <%= @today %>
+  Today is <%= @today %>
 
-Current account information in JSON format:
-<%= @current_user_json %>
+  Current account information in JSON format:
+  <%= @current_user_json %>
 
-Do an accountability follow-up with me on my previous workouts. When no previous workout information is available, help me get started.
+  Do an accountability follow-up with me on my previous workouts. When no previous workout information is available, help me get started.
 
-Today's workout information in JSON format:
-<%= @current_workout_json %>
+  Today's workout information in JSON format:
+  <%= @current_workout_json %>
 
-User says:
-<%= @user_text %>|)
+  User says:
+  <%= @user_text %>|)
 
-    updated_chain =
-      llm_chain
-      |> LLMChain.add_message(
-        PromptTemplate.to_message!(current_user_template, %{
-          current_user_json: current_user |> Jason.encode!(),
-          current_workout_json:
-            FitnessLogs.list_fitness_logs(current_user.id, days: 0) |> Jason.encode!(),
-          today: today |> Calendar.strftime("%A, %Y-%m-%d"),
-          user_text: user_text
-        })
-      )
+    with {:ok, current_user_json} <- Jason.encode(current_user),
+        {:ok, current_workout_json} <-
+          FitnessLogs.list_fitness_logs(current_user.id, days: 0)
+          |> Jason.encode() do
+      updated_chain =
+        llm_chain
+        |> LLMChain.add_message(
+          PromptTemplate.to_message!(current_user_template, %{
+            current_user_json: current_user_json,
+            current_workout_json: current_workout_json,
+            today: today |> Calendar.strftime("%A, %Y-%m-%d"),
+            user_text: user_text
+          })
+        )
 
-    socket
-    |> assign(llm_chain: updated_chain)
-    # display what the user said, but not what we sent.
-    |> append_display_message(%ChatMessage{role: :user, content: user_text})
+      socket
+      |> assign(llm_chain: updated_chain)
+      # display what the user said, but not what we sent.
+      |> append_display_message(%ChatMessage{role: :user, content: user_text})
+    else
+      error ->
+        IO.inspect("Error encoding data for prompt template", limit: :infinity)
+        IO.inspect(error, label: "Error", limit: :infinity)
+        # Handle the error, maybe by using default values or sending an error message
+        socket
+    end
   end
 
   def add_user_message(socket, user_text) when is_binary(user_text) do
@@ -251,6 +260,7 @@ User says:
     llm_chain =
       LLMChain.new!(%{
         llm:
+
           ChatOpenAI.new!(%{
             model: "gpt-4",
             # don't get creative with answers
@@ -258,6 +268,15 @@ User says:
             request_timeout: 60_000,
             stream: true
           }),
+
+          # ChatGoogleAI.new!(%{
+          #   model: "gemini-2.0-flash-exp",
+          #   # don't get creative with answers
+          #   temperature: 0,
+          #   request_timeout: 60_000,
+          #   stream: true,
+          #   api_key: Application.get_env(:langchain, :google_ai_key).()
+          # }),
         custom_context: %{
           live_view_pid: self(),
           current_user: socket.assigns.current_user
@@ -304,28 +323,66 @@ Before modifying the user's training program, summarize the change and confirm t
 
     callback_fn = fn
       %LangChain.MessageDelta{} = delta ->
-        send(live_view_pid, {:chat_delta, delta})
+        try do
+          send(live_view_pid, {:chat_delta, delta})
+        catch
+          e, stacktrace ->
+            IO.inspect("Error in callback_fn for MessageDelta", limit: :infinity)
+            IO.inspect(e, label: "Error", limit: :infinity)
+            IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
+        end
 
       %LangChain.Message{role: :tool} = message ->
-        send(live_view_pid, {:tool_executed, message})
+        try do
+          send(live_view_pid, {:tool_executed, message})
+        catch
+          e, stacktrace ->
+            IO.inspect("Error in callback_fn for Message (tool)", limit: :infinity)
+            IO.inspect(e, label: "Error", limit: :infinity)
+            IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
+        end
 
       %LangChain.Message{} = _message ->
-        # disregard the other full-message callbacks. We use the :chat_delta
-        # message to update the LLMChain state in the LiveView process.
-        :ok
+        try do
+          :ok
+        catch
+          e, stacktrace ->
+            IO.inspect("Error in callback_fn for Message (other)", limit: :infinity)
+            IO.inspect(e, label: "Error", limit: :infinity)
+            IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
+        end
     end
 
     socket
     |> assign(:async_result, AsyncResult.loading())
     |> start_async(:running_llm, fn ->
-      case LLMChain.run(chain, while_needs_response: true, callback_fn: callback_fn) do
-        # Don't return a large success result. Callbacks return what we want.
-        {:ok, _updated_chain, _last_message} ->
-          :ok
+      try do
+        case LLMChain.run(chain, while_needs_response: true, callback_fn: callback_fn) do
+          # Don't return a large success result. Callbacks return what we want.
+          {:ok, _updated_chain, _last_message} ->
+            :ok
 
-        # return the errors for display
-        {:error, reason} ->
-          {:error, reason}
+          # return the errors for display
+          {:error, reason} ->
+            {:error, reason}
+        end
+      catch
+        # Handle different error types if needed
+        CaseClauseError, stacktrace ->
+          IO.inspect("CaseClauseError caught in LLMChain.run within start_async",
+            limit: :infinity
+          )
+          IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
+          # Re-raise the error if you want it to terminate the process, or handle it gracefully
+          {:error, %CaseClauseError{}} # Convert to an error tuple
+
+        # Catch-all for other errors
+        e, stacktrace ->
+          IO.inspect("Error caught in LLMChain.run within start_async", limit: :infinity)
+          IO.inspect(e, label: "Error", limit: :infinity)
+          IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
+          # Re-raise or handle gracefully
+          {:error, e} # Convert to an error tuple
       end
     end)
   end

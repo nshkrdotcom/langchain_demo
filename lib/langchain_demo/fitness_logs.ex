@@ -25,27 +25,55 @@ defmodule LangChainDemo.FitnessLogs do
 
   """
   def list_fitness_logs(user_id, filters \\ []) do
-    days = Keyword.get(filters, :days, 12)
+    try do
+      days = Keyword.get(filters, :days, 12)
 
-    from_date = DateTime.utc_now() |> DateTime.to_date() |> Date.add(-days)
+      # Ensure days is a non-negative integer
+      days = if is_integer(days) && days >= 0, do: days, else: 12
 
-    query =
-      from(f in FitnessLog,
-        where: f.fitness_user_id == ^user_id,
-        where: f.date >= ^from_date,
-        order_by: [desc: f.date, asc: f.activity, asc: f.id]
-      )
+      from_date = DateTime.utc_now() |> DateTime.to_date() |> Date.add(-days)
 
-    run_query =
-      case Keyword.fetch(filters, :activity) do
-        {:ok, value} ->
-          from(q in query, where: like(q.activity, ^value))
+      query =
+        from(
+          f in FitnessLog,
+          where: f.fitness_user_id == ^user_id,
+          where: f.date >= ^from_date,
+          order_by: [desc: f.date, asc: f.activity, asc: f.id]
+        )
 
-        :error ->
-          query
+      run_query =
+        case Keyword.fetch(filters, :activity) do
+          {:ok, value} ->
+            # Use ilike for case-insensitive matching
+            from(q in query, where: ilike(q.activity, ^"%#{value}%"))
+
+          :error ->
+            query
+        end
+
+      case Repo.all(run_query) do
+        {:error, reason} ->
+          # Handle database errors
+          IO.inspect("Database error in list_fitness_logs", limit: :infinity)
+          IO.inspect(reason, label: "Reason", limit: :infinity)
+          {:error, "Failed to retrieve fitness logs"}
+
+        logs ->
+          logs
       end
-
-    Repo.all(run_query)
+    catch
+      e, stacktrace ->
+        IO.inspect("Exception in list_fitness_logs", limit: :infinity)
+        IO.inspect(e, label: "Error", limit: :infinity)
+        IO.inspect(stacktrace, label: "Stacktrace", limit: :infinity)
+        # Provide a more specific error message if possible
+        case e do
+          %ArgumentError{message: message} ->
+            {:error, "Argument error while fetching fitness logs: #{message}"}
+          _ ->
+            {:error, "An error occurred while fetching fitness logs"}
+        end
+    end
   end
 
   @doc """
