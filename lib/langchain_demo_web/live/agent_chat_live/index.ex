@@ -21,7 +21,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
       # fake current_user setup.
       # Data expected after `mix ecto.setup` from the `seeds.exs`
       |> assign(:current_user, FitnessUsers.get_fitness_user!(1))
-
+      |> assign(:is_loading, false)
 
 
     {:ok, socket}
@@ -45,7 +45,6 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
       |> reset_chat_message_form()
       |> assign_llm_chain()
       |> assign(:async_result, %AsyncResult{})
-      #|> _handle_event_init()
 
       #Logger.info("*****MOUNT SOCKET INITIAL STATE: #{inspect(socket, limit: 2+Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
       {:noreply, socket}
@@ -104,6 +103,7 @@ end
 
   @impl true
   def handle_info({:chat_delta, %LangChain.MessageDelta{} = delta}, socket) do
+    #Logger.info("*****Handling chat delta***********************************************")
     try do
       updated_chain = LLMChain.apply_delta(socket.assigns.llm_chain, delta)
 
@@ -120,7 +120,7 @@ end
         else
           socket
         end
-      Logger.info("*****Handling chat delta: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+      #Logger.info("*****Handling chat delta: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
       {:noreply, assign(socket, :llm_chain, updated_chain)}
     catch
       error, stacktrace ->
@@ -130,7 +130,7 @@ end
   end
 
   def handle_info({:tool_executed, tool_message}, socket) do
-    Logger.info("*****Handling tool message: #{inspect(tool_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    #Logger.info("*****Handling tool message: #{inspect(tool_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     try do
       message = %ChatMessage{
         role: tool_message.role,
@@ -138,12 +138,13 @@ end
         tool_calls: tool_message.tool_calls,
         tool_results: tool_message.tool_results
       }
-      Logger.info("*****************Created chat message: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+      #Logger.info("*****************Created chat message: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
 
       socket =
         socket
         |> assign(:llm_chain, LLMChain.add_message(socket.assigns.llm_chain, tool_message))
         |> append_display_message(message)
+        |> clear_loading()
 
       {:noreply, socket}
     catch
@@ -192,6 +193,7 @@ end
     socket =
       socket
       |> assign(:async_result, AsyncResult.ok(%AsyncResult{}, :ok))
+      |> clear_loading()
 
     {:noreply, socket}
   end
@@ -204,6 +206,7 @@ end
       socket
       |> put_flash(:error, error_message)
       |> assign(:async_result, AsyncResult.failed(%AsyncResult{}, reason))
+      |> clear_loading()
 
     {:noreply, socket}
   end
@@ -216,6 +219,7 @@ end
       socket
       |> put_flash(:error, error_message)
       |> assign(:async_result, AsyncResult.failed(%AsyncResult{}, reason))
+      |> clear_loading()
 
     {:noreply, socket}
   end
@@ -269,6 +273,7 @@ User says:
       |> assign(llm_chain: updated_chain)
       # display what the user said, but not what we sent.
       |> append_display_message(%ChatMessage{role: :user, content: user_text})
+      |> set_loading()
     else
       error ->
         IO.inspect("Error encoding data for prompt template", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
@@ -286,6 +291,7 @@ User says:
     socket
     |> assign(llm_chain: updated_chain)
     |> append_display_message(%ChatMessage{role: :user, content: user_text})
+    |> set_loading()
   end
 
   defp assign_llm_chain(socket) do
@@ -327,6 +333,7 @@ Before modifying the user's training program, summarize the change and confirm t
             model: "gemini-1.5-flash-8b",
             temperature: 0,
             stream: true,
+            #stream: false,
             api_key: Application.get_env(:langchain, :google_ai_key).()
           }),
         custom_context: %{
@@ -404,7 +411,7 @@ Before modifying the user's training program, summarize the change and confirm t
             :ok
           end,
           on_llm_token_usage: fn _model, usage ->
-            Logger.info("*****TOKEN USAGE: #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+            #Logger.info("*****TOKEN USAGE: #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
             :ok
           end,
           on_llm_ratelimit_info: fn _model, rate_limit ->
@@ -447,5 +454,15 @@ Before modifying the user's training program, summarize the change and confirm t
   defp append_display_message(socket, %ChatMessage{} = message) do
     #Logger.info("(************************************ append_display_message!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     assign(socket, :display_messages, socket.assigns.display_messages ++ [message])
+  end
+
+  defp set_loading(socket) do
+    Logger.info("!!!!!!!!!! Loading ON !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    assign(socket, :is_loading, true)
+  end
+
+  defp clear_loading(socket) do
+    Logger.info("!!!!!!!!!! Loading off!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    assign(socket, :is_loading, false)
   end
 end

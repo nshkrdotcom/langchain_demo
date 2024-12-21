@@ -128,11 +128,11 @@
         </div>
       </div>
     </li>
-
+ 
     <%= if @llm_chain.delta do %>
       <li class="relative pl-4 pr-6 py-5 hover:bg-gray-50 sm:py-6 sm:pl-6 lg:pl-8 xl:pl-6">
         <div class="flex items-center space-x-4">
-          <div class="shrink-0 w-8">
+          <div class={"shrink-0 w-8 #{if @is_loading, do: "", else: "hidden"}"}>
             <div class="text-center">
               <img src={~p"/images/typing-animation.gif"} class="w-12" />
             </div>
