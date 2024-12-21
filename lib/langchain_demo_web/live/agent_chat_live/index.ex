@@ -27,6 +27,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
 
   @impl true
   def handle_params(_params, _uri, socket) do
+    Logger.info("***** [def handle_params(_params, _uri, socket) do] Handle PARAMS!")
     socket =
       socket
       # display a prompt message for the UI that isn't used in the actual
@@ -43,7 +44,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
       |> assign_llm_chain()
       |> assign(:async_result, %AsyncResult{})
 
-    {:noreply, socket}
+      {:noreply, socket}
   end
 
   @impl true
@@ -57,13 +58,17 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   end
 
   def handle_event("save", %{"chat_message" => params}, socket) do
+    is_new = ChatMessage.new(params)
+    Logger.info("*****Handle Event SAVE, is new: #{inspect(is_new, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     socket =
-      case ChatMessage.new(params) do
+      case is_new do
         {:ok, %ChatMessage{} = message} ->
+          Logger.info("*****Handle Event SAVE, msg: #{inspect(message.content, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
           socket
           |> add_user_message(message.content)
           |> reset_chat_message_form()
           |> run_chain()
+          |> run_chain()  # TODO: WHy does the first run chain not trigger the callbacks ?? from langchain ?
 
         {:error, changeset} ->
           assign_form(socket, changeset)
@@ -94,7 +99,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
 
   @impl true
   def handle_info({:chat_delta, %LangChain.MessageDelta{} = delta}, socket) do
-    Logger.info("Handling chat delta: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    Logger.info("*****Handling chat delta: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     try do
       updated_chain = LLMChain.apply_delta(socket.assigns.llm_chain, delta)
 
@@ -121,7 +126,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   end
 
   def handle_info({:tool_executed, tool_message}, socket) do
-    Logger.info("Handling tool message: #{inspect(tool_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    Logger.info("*****Handling tool message: #{inspect(tool_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     try do
       message = %ChatMessage{
         role: tool_message.role,
@@ -129,7 +134,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
         tool_calls: tool_message.tool_calls,
         tool_results: tool_message.tool_results
       }
-      Logger.info("Created chat message: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+      Logger.info("*****************Created chat message: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
 
       socket =
         socket
@@ -145,6 +150,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   end
 
   def handle_info({:updated_current_user, updated_user}, socket) do
+    Logger.info("*********************** Trying to handle :updated_current_user")
     try do
       socket =
         socket
@@ -188,7 +194,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
 
   def handle_async(:running_llm, {:ok, {:error, reason}}, socket) do
     error_message = format_error_message(reason)
-    Logger.error("LLM chain error: #{error_message}")
+    Logger.error("*********************************************************ERROR************************************************ LLM chain error: #{error_message}")
 
     socket =
       socket
@@ -214,6 +220,24 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
     assign(socket, :form, to_form(changeset))
   end
 
+  def foo_user_message(
+        %{assigns: %{llm_chain: %LLMChain{last_message: %Message{role: :system}} = llm_chain}} =
+          socket,
+        user_text
+      )
+      when is_binary(user_text) do
+    Logger.info("***** ADD USER MESSAGE Full Prompt #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    updated_chain =
+      llm_chain
+      |> LLMChain.add_message(Message.new_user!(user_text))
+    socket
+    |> assign(llm_chain: updated_chain)
+    # display what the user said, but not what we sent.
+    |> append_display_message(%ChatMessage{role: :user, content: user_text})
+
+  end
+
+
   # if this is the FIRST user message, use a prompt template to include some
   # initial hidden instructions. We detect if it's the first by matching on the
   # last_messaging being the "system" message.
@@ -223,38 +247,37 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
         user_text
       )
       when is_binary(user_text) do
+    Logger.info("***** ADD USER MESSSAGE INITIAL: #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     current_user = socket.assigns.current_user
     today = DateTime.now!(current_user.timezone)
 
     current_user_template =
       PromptTemplate.from_template!(~S|
-  Today is <%= @today %>
+Today is <%= @today %>
 
-  Current account information in JSON format:
-  <%= @current_user_json %>
+Current account information in JSON format:
+<%= @current_user_json %>
 
-  Do an accountability follow-up with me on my previous workouts. When no previous workout information is available, help me get started.
+Do an accountability follow-up with me on my previous workouts. When no previous workout information is available, help me get started.
 
-  Today's workout information in JSON format:
-  <%= @current_workout_json %>
+Today's workout information in JSON format:
+<%= @current_workout_json %>
 
-  User says:
-  <%= @user_text %>|)
-
+User says:
+<%= @user_text %>|)
     with {:ok, current_user_json} <- Jason.encode(current_user),
-        {:ok, current_workout_json} <-
-          FitnessLogs.list_fitness_logs(current_user.id, days: 0)
-          |> Jason.encode() do
+        {:ok, current_workout_json} <- FitnessLogs.list_fitness_logs(current_user.id, days: 0)
+      |> Jason.encode() do
+      updated_message = PromptTemplate.to_message!(current_user_template, %{
+        current_user_json: current_user_json,
+        current_workout_json: current_workout_json,
+        today: today |> Calendar.strftime("%A, %Y-%m-%d"),
+        user_text: user_text
+      })
+      Logger.info("***** ADD USER MESSAGE Full Prompt #{inspect(updated_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
       updated_chain =
         llm_chain
-        |> LLMChain.add_message(
-          PromptTemplate.to_message!(current_user_template, %{
-            current_user_json: current_user_json,
-            current_workout_json: current_workout_json,
-            today: today |> Calendar.strftime("%A, %Y-%m-%d"),
-            user_text: user_text
-          })
-        )
+        |> LLMChain.add_message(updated_message)
 
       socket
       |> assign(llm_chain: updated_chain)
@@ -271,6 +294,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
 
   def add_user_message(socket, user_text) when is_binary(user_text) do
     # NOT the first message. Submit the user's text as-is.
+    Logger.info("***** ADD USER MESSSAGE (FOLLOWUPS): #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     updated_chain = LLMChain.add_message(socket.assigns.llm_chain, Message.new_user!(user_text))
 
     socket
@@ -279,57 +303,8 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   end
 
   defp assign_llm_chain(socket) do
-    llm_chain =
-      LLMChain.new!(%{
-        llm:
-
-          #ChatOpenAI.new!(%{
-          ChatGoogleAI.new!(%{
-            #model: "gpt-4",
-            model: "gemini-1.5-flash-8b",
-            # don't get creative with answers
-            temperature: 0,
-            request_timeout: 60_000,
-            stream: true,
-            api_key: Application.get_env(:langchain, :google_ai_key).(),
-             callbacks: [
-               %{
-                 on_llm_new_delta: fn _model, delta ->
-                      try do
-                        send(self(), {:chat_delta, delta})
-                      catch
-                        e, stacktrace ->
-                          IO.inspect("Error in on_llm_new_delta", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                          IO.inspect(e, label: "Error", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                          IO.inspect(stacktrace, label: "Stacktrace", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                      end
-                  end,
-                 on_llm_token_usage: fn _model, usage ->
-                  IO.inspect(usage)
-                   :ok
-                 end,
-                 on_llm_new_message: fn _model, message ->
-                    try do
-                      send(self(), {:tool_executed, message})
-                    catch
-                      e, stacktrace ->
-                        IO.inspect("Error in on_llm_new_message", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                        IO.inspect(e, label: "Error", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                        IO.inspect(stacktrace, label: "Stacktrace", limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity))
-                    end
-                 end
-               }
-             ]
-          }),
-        custom_context: %{
-          live_view_pid: self(),
-          current_user: socket.assigns.current_user
-        },
-        verbose: false
-      })
-      |> LLMChain.add_tools(UpdateCurrentUserFunction.new!())
-      |> LLMChain.add_tools(FitnessLogsTool.new_functions!())
-      |> LLMChain.add_message(Message.new_system!(~S|
+    #Logger.info("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ASSIGN LLM CHAIN\n")
+    system_prompt_text = ~S|
 You are a helpful American virtual personal strength trainer. Your name is "Max". Limit discussions
 to ONLY discuss the user's fitness programs and fitness goals. You speak in a natural, casual and conversational tone.
 Help the user to improve their fitness and strength. Do not answer questions
@@ -355,52 +330,108 @@ Format for weekly fitness plan:
 - Activity: details like distance or sets and reps. (Weight if historical data is available)
 - Activity: details. (Weight)
 
-Before modifying the user's training program, summarize the change and confirm the change.|))
+Before modifying the user's training program, summarize the change and confirm the change.|
+    llm_chain =
+      LLMChain.new!(%{
+        llm:
+
+          #ChatOpenAI.new!(%{
+          ChatGoogleAI.new!(%{
+            #model: "gpt-4",
+            model: "gemini-1.5-flash-8b",
+            temperature: 0,
+            stream: true,
+            api_key: Application.get_env(:langchain, :google_ai_key).()
+          }),
+        custom_context: %{
+          live_view_pid: self(),
+          current_user: socket.assigns.current_user
+        },
+        verbose: false
+      })
+      |> LLMChain.add_tools(UpdateCurrentUserFunction.new!())
+      |> LLMChain.add_tools(FitnessLogsTool.new_functions!())
+      |> LLMChain.add_message(Message.new_system!(system_prompt_text))
+
+    Logger.info("***** [defp assign_llm_chain(socket) do] Created and assigned the LLM chain, system prompt set, set up the connection to the provider!")#" #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
 
     socket
     |> assign(:llm_chain, llm_chain)
+
   end
 
   def run_chain(socket) do
     chain = socket.assigns.llm_chain
     live_view_pid = self()
 
-    Logger.info("Starting LLMChain.run...")
+    # Logger.info("*****Starting LLMChain.run for the save pipeline...")
+    # callback_fn = fn
+    #   %LangChain.MessageDelta{} = delta ->
+    #     send(live_view_pid, {:chat_delta, delta})
 
+    #   %LangChain.TokenUsage{} = usage ->
+    #     Logger.info("*****token usage message received #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    #     :ok
+
+    #   %LangChain.Message{role: :tool} = message ->
+    #     send(live_view_pid, {:tool_executed, message})
+
+    #   %LangChain.Message{} = _message ->
+    #     # disregard the other full-message callbacks. We use the :chat_delta
+    #     # message to update the LLMChain state in the LiveView process.
+    #     :ok
+    # end
+
+
+    # socket
+    # |> assign(:async_result, AsyncResult.loading())
+    # |> start_async(:running_llm, fn ->
+    #   result = LLMChain.run(chain, while_needs_response: true, callback_fn: callback_fn)
+    #   Logger.info("*****LLMChain.run result: #{inspect(result, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    #   case result do
+    #     # Don't return a large success result. Callbacks return what we want.
+    #     {:ok, _updated_chain} ->
+    #       Logger.info("*****Chain completed successfully without message")
+    #       :ok
+    #     # return the errors for display
+    #     {:error, reason} ->
+    #       {:error, reason}
+    #     unexpected ->
+    #       Logger.error("Unexpected chain response: #{inspect(unexpected, pretty: true)}")
+    #       {:error, "Unexpected response from chat service"}
+    #   end
+    # end)
     socket =
       socket
       |> assign(
         :llm_chain,
         LLMChain.add_llm_callback(socket.assigns.llm_chain, %{
           on_llm_new_delta: fn _model, delta ->
-            Logger.info("DELTA RECEIVED: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+            Logger.info("*****DELTA RECEIVED: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
             send(live_view_pid, {:chat_delta, delta})
             :ok
           end,
           on_llm_token_usage: fn _model, usage ->
-            Logger.info("TOKEN USAGE: #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+            Logger.info("*****TOKEN USAGE: #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
             :ok
           end,
           on_llm_new_message: fn _model, message ->
-            Logger.info("NEW MESSAGE RECEIVED: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+            Logger.info("*****NEW MESSAGE RECEIVED: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
             send(live_view_pid, {:tool_executed, message})
             :ok
           end
         })
       )
-
+    Logger.info("\n !!!!!!!!!!! SENDING CHAIN LLMChain.run: #{inspect(chain, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     socket
     |> assign(:async_result, AsyncResult.loading())
     |> start_async(:running_llm, fn ->
       result = LLMChain.run(chain, while_needs_response: true)
-      Logger.info("LLMChain.run result: #{inspect(result, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+      Logger.info("*****LLMChain.run result: #{inspect(result, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
 
       case result do
-        {:ok, _updated_chain, _last_message} ->
-          Logger.info("Chain completed successfully with message")
-          :ok
         {:ok, _updated_chain} ->
-          Logger.info("Chain completed successfully without message")
+          Logger.info("*****Chain completed successfully")
           :ok
         {:error, reason} ->
           Logger.error("Chain error: #{inspect(reason)}")
@@ -417,12 +448,13 @@ Before modifying the user's training program, summarize the change and confirm t
   defp format_error_message(reason), do: inspect(reason)
 
   defp reset_chat_message_form(socket) do
-    # Logger.info("resetting chat mssage form!!***********************")
+    # Logger.info("*****resetting chat mssage form!!***********************")
     changeset = ChatMessage.create_changeset(%{})
     assign_form(socket, changeset)
   end
 
   defp append_display_message(socket, %ChatMessage{} = message) do
+    Logger.info("***** append_display_message: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     assign(socket, :display_messages, socket.assigns.display_messages ++ [message])
   end
 end
