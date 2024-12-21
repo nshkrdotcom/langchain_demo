@@ -6,7 +6,6 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
   alias LangChainDemoWeb.AgentChatLive.Agent.ChatMessage
   alias LangChain.Chains.LLMChain
   alias LangChain.Message
-  #alias LangChain.ChatModels.ChatOpenAI
   alias LangChain.ChatModels.ChatGoogleAI
   alias LangChain.PromptTemplate
   alias LangChainDemoWeb.AgentChatLive.Agent.UpdateCurrentUserFunction
@@ -64,6 +63,8 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
         {:ok, %ChatMessage{} = message} ->
           socket
         |> add_user_message(message.content)
+
+        #|> assign(:form, to_form(%Ecto.Changeset{data: %ChatMessage{}, changes: %{content: "Please Wait..."}}))
         |> reset_chat_message_form()
         |> run_chain()
 
@@ -102,7 +103,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
       # end}")
       # Logger.info("Status: #{(socket.assigns.llm_chain.delta && socket.assigns.llm_chain.delta.status) || "no status"}")
       #Logger.info("Delta: #{inspect(socket.assigns.llm_chain.delta)}")
-      Logger.info("updated_chain: #{inspect(updated_chain.delta, limit: 12, pretty: true)}")
+      #Logger.info("updated_chain: #{inspect(updated_chain.delta, limit: 12, pretty: true)}")
       {:noreply, assign(socket, :llm_chain, updated_chain)}
     catch
       error, stacktrace ->
@@ -121,6 +122,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
             hidden: true,
             content: updated_chain.last_message.content,
           })
+        #|> reset_chat_message_form()
       #Logger.info("updated_chain: #{inspect(updated_chain.last_message, limit: :infinity, pretty: true)}\n socket: #{inspect(socket, limit: :infinity, pretty: true)}")
       {:noreply, assign(socket, :llm_chain, updated_chain)}
     catch
@@ -240,6 +242,11 @@ Do an accountability follow-up with me on my previous workouts. When no previous
 
 Today's workout information in JSON format:
 <%= @current_workout_json %>
+
+This text ALREADYSENT was already sent by you to the user, so do not introduce yourself. They should answer your question in the below prompt.
+```ALREADYSENT
+  Hello! My name is Max and I'm your personal trainer! How can I help you today?
+```
 
 User says:
 <%= @user_text %>|)
@@ -373,7 +380,6 @@ Before modifying the user's training program, summarize the change and confirm t
   defp format_error_message(reason), do: inspect(reason)
 
   defp reset_chat_message_form(socket) do
-    Logger.info("RESETINGG!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     changeset = ChatMessage.create_changeset(%{})
     assign_form(socket, changeset)
   end
