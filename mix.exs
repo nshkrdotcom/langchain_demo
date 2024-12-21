@@ -56,7 +56,8 @@ defmodule LangChainDemo.MixProject do
       # {:req, "~> 0.3"},
       {:yaml_elixir, "~> 2.11.0"},
       # timezone database
-      {:tzdata, "~> 1.1"}
+      {:tzdata, "~> 1.1"},
+      #{:logger_file_backend, "~> 0.0.14"}
     ]
   end
 

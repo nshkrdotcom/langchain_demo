@@ -58,20 +58,65 @@ config :langchain, :openai_key, fn -> System.fetch_env!("OPENAI_API_KEY") end
 
 config :langchain, :google_ai_key, fn -> System.fetch_env!("GOOGLE_API_KEY") end
 
-# Configures Elixir's Logger
-config :logger, :console,
-  format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id],
-  formatter: {LangchainDemo.LoggerFormatter, :format, []}
-
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
 # Setup timezone database
 config :elixir, :time_zone_database, Tzdata.TimeZoneDatabase
 
+
+
+# Configures Elixir's Logger
+config :logger, :console,
+  format: "$time $metadata[$level] $message\n",
+  metadata: [:request_id],
+  formatter: {LangchainDemo.LoggerFormatter, :format, []}
+
 config :logger,
   backends: [{Logger.Backends.Console, format: {LangchainDemo.LoggerFormatter, :format}}]
+
+
+# Configure logger with both formatting and filtering
+# config :logger, :console,
+#   format: "$time $metadata[$level] $message\n",
+#   metadata: [:request_id],
+#   formatter: {LangchainDemo.LoggerFormatter, :format, []},
+#   metadata_filter: {LangchainDemo.SanitizedLogger, :filter_sensitive}
+
+#   config :logger,
+#   backends: [{Logger.Backends.Console, format: {LangchainDemo.LoggerFormatter, :format}}],
+#   filter_default_config: %{
+#     keep: [],
+#     drop: %{
+#       # API Keys - common formats
+#       api_key: ~r/[A-Za-z0-9\-_]{20,}/,
+#       google_api: ~r/AIza[A-Za-z0-9\-_]{35}/,
+#       gemini_key: ~r/AIzaSy[A-Za-z0-9\-_]{32}/,
+
+#       # JWT tokens
+#       jwt: ~r/eyJ[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_.+\/=]*/,
+
+#       # Generic secrets and passwords
+#       password: ~r/.+/,
+#       secret: ~r/.+/,
+#       secret_key: ~r/.+/,
+
+#       # Database connection strings
+#       database_url: ~r/postgres:\/\/.*:.*@.*/,
+
+#       # AWS-style keys
+#       aws_key: ~r/AKIA[0-9A-Z]{16}/,
+#       aws_secret: ~r/[A-Za-z0-9\/+=]{40}/
+#     }
+#   }
+
+
+
+
+
+
+
+
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

@@ -51,7 +51,10 @@
           </div>
         </div>
         <div class="min-w-0 flex-auto space-y-2">
-          <.markdown :if={message.role == :assistant} text={message.content} />
+          <span :if={message.role == :assistant} class="whitespace-pre-wrap">
+            teststatastast  <%= message.content %>
+          </span>        
+          <!--- %<.markdown :if={message.role == :assistant} text={message.content} /> --->
           <span :if={message.role == :user} class="whitespace-pre-wrap">
             <%= message.content %>
           </span>

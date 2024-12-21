@@ -1,0 +1,379 @@
+[1mdiff --git a/config/config.exs b/config/config.exs[m
+[1mindex 3e61e65..dfd581c 100644[m
+[1m--- a/config/config.exs[m
+[1m+++ b/config/config.exs[m
+[36m@@ -58,21 +58,66 @@[m [mconfig :langchain, :openai_key, fn -> System.fetch_env!("OPENAI_API_KEY") end[m
+ [m
+ config :langchain, :google_ai_key, fn -> System.fetch_env!("GOOGLE_API_KEY") end[m
+ [m
+[31m-# Configures Elixir's Logger[m
+[31m-config :logger, :console,[m
+[31m-  format: "$time $metadata[$level] $message\n",[m
+[31m-  metadata: [:request_id],[m
+[31m-  formatter: {LangchainDemo.LoggerFormatter, :format, []}[m
+[31m-[m
+ # Use Jason for JSON parsing in Phoenix[m
+ config :phoenix, :json_library, Jason[m
+ [m
+ # Setup timezone database[m
+ config :elixir, :time_zone_database, Tzdata.TimeZoneDatabase[m
+ [m
+[32m+[m
+[32m+[m
+[32m+[m[32m# Configures Elixir's Logger[m
+[32m+[m[32mconfig :logger, :console,[m
+[32m+[m[32m  format: "$time $metadata[$level] $message\n",[m
+[32m+[m[32m  metadata: [:request_id],[m
+[32m+[m[32m  formatter: {LangchainDemo.LoggerFormatter, :format, []}[m
+[32m+[m
+ config :logger,[m
+   backends: [{Logger.Backends.Console, format: {LangchainDemo.LoggerFormatter, :format}}][m
+ [m
+[32m+[m
+[32m+[m[32m# Configure logger with both formatting and filtering[m
+[32m+[m[32m# config :logger, :console,[m
+[32m+[m[32m#   format: "$time $metadata[$level] $message\n",[m
+[32m+[m[32m#   metadata: [:request_id],[m
+[32m+[m[32m#   formatter: {LangchainDemo.LoggerFormatter, :format, []},[m
+[32m+[m[32m#   metadata_filter: {LangchainDemo.SanitizedLogger, :filter_sensitive}[m
+[32m+[m
+[32m+[m[32m#   config :logger,[m
+[32m+[m[32m#   backends: [{Logger.Backends.Console, format: {LangchainDemo.LoggerFormatter, :format}}],[m
+[32m+[m[32m#   filter_default_config: %{[m
+[32m+[m[32m#     keep: [],[m
+[32m+[m[32m#     drop: %{[m
+[32m+[m[32m#       # API Keys - common formats[m
+[32m+[m[32m#       api_key: ~r/[A-Za-z0-9\-_]{20,}/,[m
+[32m+[m[32m#       google_api: ~r/AIza[A-Za-z0-9\-_]{35}/,[m
+[32m+[m[32m#       gemini_key: ~r/AIzaSy[A-Za-z0-9\-_]{32}/,[m
+[32m+[m
+[32m+[m[32m#       # JWT tokens[m
+[32m+[m[32m#       jwt: ~r/eyJ[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_=]+\.?[A-Za-z0-9\-_.+\/=]*/,[m
+[32m+[m
+[32m+[m[32m#       # Generic secrets and passwords[m
+[32m+[m[32m#       password: ~r/.+/,[m
+[32m+[m[32m#       secret: ~r/.+/,[m
+[32m+[m[32m#       secret_key: ~r/.+/,[m
+[32m+[m
+[32m+[m[32m#       # Database connection strings[m
+[32m+[m[32m#       database_url: ~r/postgres:\/\/.*:.*@.*/,[m
+[32m+[m
+[32m+[m[32m#       # AWS-style keys[m
+[32m+[m[32m#       aws_key: ~r/AKIA[0-9A-Z]{16}/,[m
+[32m+[m[32m#       aws_secret: ~r/[A-Za-z0-9\/+=]{40}/[m
+[32m+[m[32m#     }[m
+[32m+[m[32m#   }[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+ # Import environment specific config. This must remain at the bottom[m
+ # of this file so it overrides the configuration defined above.[m
+ import_config "#{config_env()}.exs"[m
+[1mdiff --git a/lib/langchain_demo_web/live/agent_chat_live/index.ex b/lib/langchain_demo_web/live/agent_chat_live/index.ex[m
+[1mindex 2dc9644..46d32b6 100644[m
+[1m--- a/lib/langchain_demo_web/live/agent_chat_live/index.ex[m
+[1m+++ b/lib/langchain_demo_web/live/agent_chat_live/index.ex[m
+[36m@@ -16,6 +16,7 @@[m [mdefmodule LangChainDemoWeb.AgentChatLive.Index do[m
+ [m
+   @impl true[m
+   def mount(_params, _session, socket) do[m
+[32m+[m[32m    Logger.info("Testing with api_key AIzaSyBRECWaG4mOA7e7fUu9eUARvssssss H0tS3YGt_09013409174091734079134097134029178230891740917430197342091743")[m
+     socket =[m
+       socket[m
+       # fake current_user setup.[m
+[36m@@ -67,7 +68,7 @@[m [mdefmodule LangChainDemoWeb.AgentChatLive.Index do[m
+     socket =[m
+       case is_new do[m
+         {:ok, %ChatMessage{} = message} ->[m
+[31m-          Logger.info("*****Handle Event SAVE, msg: #{inspect(message.content, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+[32m+[m[32m          #Logger.info("*****Handle Event SAVE, msg: #{inspect(message.content, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+           socket[m
+         |> add_user_message(message.content)[m
+         |> reset_chat_message_form()[m
+[36m@@ -103,23 +104,49 @@[m [mend[m
+ [m
+   @impl true[m
+   def handle_info({:chat_delta, %LangChain.MessageDelta{} = delta}, socket) do[m
+[31m-    #Logger.info("*****Handling chat delta***********************************************")[m
+[32m+[m[32m    #Logger.info("*****Handling chat delta***************************")[m
+     try do[m
+       updated_chain = LLMChain.apply_delta(socket.assigns.llm_chain, delta)[m
+[31m-[m
+[32m+[m[32m      #Logger.info("*****updated chain*********************************")[m
+[32m+[m[32m      Logger.info("Status: #{case socket.assigns.llm_chain.delta do[m
+[32m+[m[32m        %LangChain.MessageDelta{status: status} -> status[m
+[32m+[m[32m        nil -> "nil"[m
+[32m+[m[32m        _ -> "unexpected structure"[m
+[32m+[m[32m      end}")[m
+[32m+[m[32m      Logger.info("Status: #{(socket.assigns.llm_chain.delta && socket.assigns.llm_chain.delta.status) || "no status"}")[m
+[32m+[m[32m      Logger.info("Delta: #{inspect(socket.assigns.llm_chain.delta)}")[m
+[32m+[m[32m      #Logger.info("************ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect( socket.assigns.llm_chain, limit: :infinity, pretty: true)}")[m
+[32m+[m[32m      # socket =[m
+[32m+[m[32m      #   socket[m
+[32m+[m[32m      #   |> append_display_message(%ChatMessage{[m
+[32m+[m[32m      #       role: :assistant,[m
+[32m+[m[32m      #       hidden: "false",[m
+[32m+[m[32m      #       content: "foASF af;oj as;ofja s;flja s;lfj ;sflj s;lj o"[m
+[32m+[m[32m      #       #tool_calls: message.tool_calls,[m
+[32m+[m[32m      #       #tool_results: message.tool_results[m
+[32m+[m[32m      #     })[m
+       # Only update the display if the delta completes a message[m
+[31m-      socket =[m
+[31m-        if updated_chain.delta == nil do[m
+[31m-          message = updated_chain.last_message[m
+[31m-          append_display_message(socket, %ChatMessage{[m
+[31m-            role: message.role,[m
+[31m-            content: message.content,[m
+[31m-            tool_calls: message.tool_calls,[m
+[31m-            tool_results: message.tool_results[m
+[31m-          })[m
+[31m-        else[m
+[31m-          socket[m
+[31m-        end[m
+[32m+[m[32m      # socket[m
+[32m+[m[32m      # |> append_display_message(%ChatMessage{[m
+[32m+[m[32m      #   role: :assistant,[m
+[32m+[m[32m      #   hidden: "false",[m
+[32m+[m[32m      #   content: "foASF af;oj as;ofja s;flja s;lfj ;sflj s;lj o"[m
+[32m+[m[32m      #   #tool_calls: message.tool_calls,[m
+[32m+[m[32m      #   #tool_results: message.tool_results[m
+[32m+[m[32m      # })[m
+[32m+[m[32m      # socket =[m
+[32m+[m[32m      #   if updated_chain.delta == nil do[m
+[32m+[m[32m      #     Logger.info("*****updated chain***********************************************!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*@)))(_+(@)*$@#)$*@#)$*)@$*)*@$)*")[m
+[32m+[m[32m      #     message = updated_chain.last_message[m
+[32m+[m[32m      #     append_display_message(socket, %ChatMessage{[m
+[32m+[m[32m      #       role: message.role,[m
+[32m+[m[32m      #       content: message.content,[m
+[32m+[m[32m      #       tool_calls: message.tool_calls,[m
+[32m+[m[32m      #       tool_results: message.tool_results[m
+[32m+[m[32m      #     })[m
+[32m+[m[32m      #   else[m
+[32m+[m[32m      #     socket[m
+[32m+[m[32m      #   end[m
+       #Logger.info("*****Handling chat delta: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+       {:noreply, assign(socket, :llm_chain, updated_chain)}[m
+     catch[m
+[36m@@ -130,6 +157,7 @@[m [mend[m
+   end[m
+ [m
+   def handle_info({:tool_executed, tool_message}, socket) do[m
+[32m+[m[32m    Logger.info("*****Handling tool messagexxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")[m
+     #Logger.info("*****Handling tool message: #{inspect(tool_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+     try do[m
+       message = %ChatMessage{[m
+[36m@@ -155,7 +183,7 @@[m [mend[m
+   end[m
+ [m
+   def handle_info({:updated_current_user, updated_user}, socket) do[m
+[31m-    Logger.info("*********************** Trying to handle :updated_current_user")[m
+[32m+[m[32m    #Logger.info("*********************** Trying to handle :updated_current_user")[m
+     try do[m
+       socket =[m
+         socket[m
+[36m@@ -200,7 +228,7 @@[m [mend[m
+ [m
+   def handle_async(:running_llm, {:ok, {:error, reason}}, socket) do[m
+     error_message = format_error_message(reason)[m
+[31m-    Logger.error("*********************************************************ERROR************************************************ LLM chain error: #{error_message}")[m
+[32m+[m[32m    #Logger.error("*********************************************************ERROR************************************************ LLM chain error: #{error_message}")[m
+ [m
+     socket =[m
+       socket[m
+[36m@@ -213,7 +241,7 @@[m [mend[m
+ [m
+   def handle_async(:running_llm, {:exit, reason}, socket) do[m
+     error_message = "Chat service error: #{format_error_message(reason)}"[m
+[31m-    Logger.error(error_message)[m
+[32m+[m[32m    #Logger.error(error_message)[m
+ [m
+     socket =[m
+       socket[m
+[36m@@ -237,7 +265,7 @@[m [mend[m
+         user_text[m
+       )[m
+       when is_binary(user_text) do[m
+[31m-    Logger.info("***** ADD USER MESSSAGE INITIAL: #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+[32m+[m[32m    #Logger.info("***** ADD USER MESSSAGE INITIAL: #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+     current_user = socket.assigns.current_user[m
+     today = DateTime.now!(current_user.timezone)[m
+ [m
+[36m@@ -264,7 +292,7 @@[m [mUser says:[m
+         today: today |> Calendar.strftime("%A, %Y-%m-%d"),[m
+         user_text: user_text[m
+       })[m
+[31m-      Logger.info("***** ADD USER MESSAGE Full Prompt #{inspect(updated_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+[32m+[m[32m      #Logger.info("***** ADD USER MESSAGE Full Prompt #{inspect(updated_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+       updated_chain =[m
+         llm_chain[m
+         |> LLMChain.add_message(updated_message)[m
+[36m@@ -285,7 +313,7 @@[m [mUser says:[m
+ [m
+   def add_user_message(socket, user_text) when is_binary(user_text) do[m
+     # NOT the first message. Submit the user's text as-is.[m
+[31m-    Logger.info("***** ADD USER MESSSAGE (FOLLOWUPS): #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+[32m+[m[32m    #Logger.info("***** ADD USER MESSSAGE (FOLLOWUPS): #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+     updated_chain = LLMChain.add_message(socket.assigns.llm_chain, Message.new_user!(user_text))[m
+ [m
+     socket[m
+[36m@@ -342,11 +370,11 @@[m [mBefore modifying the user's training program, summarize the change and confirm t[m
+         },[m
+         verbose: false[m
+       })[m
+[31m-      |> LLMChain.add_tools(UpdateCurrentUserFunction.new!())[m
+[31m-      |> LLMChain.add_tools(FitnessLogsTool.new_functions!())[m
+[32m+[m[32m      #|> LLMChain.add_tools(UpdateCurrentUserFunction.new!())[m
+[32m+[m[32m      #|> LLMChain.add_tools(FitnessLogsTool.new_functions!())[m
+       |> LLMChain.add_message(Message.new_system!(system_prompt_text))[m
+ [m
+[31m-    Logger.info("***** [defp assign_llm_chain(socket) do] Created and assigned the LLM chain, system prompt set, set up the connection to the provider!")#" #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+[32m+[m[32m    #Logger.info("***** [defp assign_llm_chain(socket) do] Created and assigned the LLM chain, system prompt set, set up the connection to the provider!")#" #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+ [m
+     socket[m
+     |> assign(:llm_chain, llm_chain)[m
+[36m@@ -401,17 +429,26 @@[m [mBefore modifying the user's training program, summarize the change and confirm t[m
+         :llm_chain,[m
+         LLMChain.add_llm_callback(socket.assigns.llm_chain, %{[m
+           on_llm_new_delta: fn _model, delta ->[m
+[32m+[m[32m            #message = result.last_message[m
+[32m+[m[32m            # append_display_message(socket, %ChatMessage{[m
+[32m+[m[32m            #   role: :assistant,[m
+[32m+[m[32m            #   content: "foo"[m
+[32m+[m[32m            #   #tool_calls: message.tool_calls,[m
+[32m+[m[32m            #   #tool_results: message.tool_results[m
+[32m+[m[32m            # })[m
+[32m+[m[32m            #Logger.info("*****DELTA RECEIVE########################################################################## ")[m
+             #Logger.info("*****DELTA RECEIVED: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+             send(live_view_pid, {:chat_delta, delta})[m
+             :ok[m
+           end,[m
+           on_llm_new_message: fn _model, message ->[m
+[32m+[m[32m            #Logger.info("*****new message cereived ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")[m
+             #Logger.info("*****NEW MESSAGE RECEIVED: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+             send(live_view_pid, {:tool_executed, message})[m
+             :ok[m
+           end,[m
+           on_llm_token_usage: fn _model, usage ->[m
+[31m-            #Logger.info("*****TOKEN USAGE: #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+[32m+[m[32m            Logger.info("*****TOKEN USAGE: #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+             :ok[m
+           end,[m
+           on_llm_ratelimit_info: fn _model, rate_limit ->[m
+[36m@@ -427,12 +464,21 @@[m [mBefore modifying the user's training program, summarize the change and confirm t[m
+       result = LLMChain.run(chain, while_needs_response: true)[m
+       Logger.info("*****LLMChain.run result: #{inspect(result, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+ [m
+[32m+[m
+[32m+[m[32m      # append_display_message(socket, %ChatMessage{[m
+[32m+[m[32m      #   role: :assistant,[m
+[32m+[m[32m      #   hidden: true,[m
+[32m+[m[32m      #   content:[m
+[32m+[m[32m      #     "TRYINGT TO GET THIS TO WORK"[m
+[32m+[m[32m      # })[m
+[32m+[m
+       case result do[m
+         {:ok, _updated_chain} ->[m
+[32m+[m[32m          #[m
+           Logger.info("*****Chain completed successfully")[m
+           :ok[m
+         {:error, reason} ->[m
+[31m-          Logger.error("Chain error: #{inspect(reason)}")[m
+[32m+[m[32m          #Logger.error("Chain error: #{inspect(reason)}")[m
+           {:error, format_error_message(reason)}[m
+         unexpected ->[m
+           Logger.error("Unexpected chain response: #{inspect(unexpected)}")[m
+[36m@@ -446,23 +492,27 @@[m [mBefore modifying the user's training program, summarize the change and confirm t[m
+   defp format_error_message(reason), do: inspect(reason)[m
+ [m
+   defp reset_chat_message_form(socket) do[m
+[31m-    # Logger.info("*****resetting chat mssage form!!***********************")[m
+[32m+[m[32m    #Logger.info("*****resetting chat mssage form!!***********************")[m
+     changeset = ChatMessage.create_changeset(%{})[m
+     assign_form(socket, changeset)[m
+   end[m
+ [m
+   defp append_display_message(socket, %ChatMessage{} = message) do[m
+[31m-    #Logger.info("(************************************ append_display_message!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+[32m+[m[32m    #Logger.info("(************************************ append_display_mesage!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect( message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+[32m+[m[32m    #Logger.info("(************************************ append_display_mesage!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")[m
+     assign(socket, :display_messages, socket.assigns.display_messages ++ [message])[m
+[32m+[m[32m    #Logger.info("(************************************ append_display_essage!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect( socket.assigns, limit: :infinity, pretty: true)}")[m
+[32m+[m[32m    #Logger.info("(************************************ append_display_essage!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect( socket.assigns.display_messages, limit: :infinity, pretty: true)}")[m
+[32m+[m[32m    #socket[m
+   end[m
+ [m
+   defp set_loading(socket) do[m
+[31m-    Logger.info("!!!!!!!!!! Loading ON !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")[m
+[32m+[m[32m    #Logger.info("!!!!!!!!!! Loading ON !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")[m
+     assign(socket, :is_loading, true)[m
+   end[m
+ [m
+   defp clear_loading(socket) do[m
+[31m-    Logger.info("!!!!!!!!!! Loading off!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")[m
+[32m+[m[32m    #Logger.info("!!!!!!!!!! Loading off!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")[m
+     assign(socket, :is_loading, false)[m
+   end[m
+ end[m
+[1mdiff --git a/lib/langchain_demo_web/live/agent_chat_live/index.html.heex b/lib/langchain_demo_web/live/agent_chat_live/index.html.heex[m
+[1mindex 00b695d..970c59d 100644[m
+[1m--- a/lib/langchain_demo_web/live/agent_chat_live/index.html.heex[m
+[1m+++ b/lib/langchain_demo_web/live/agent_chat_live/index.html.heex[m
+[36m@@ -51,7 +51,10 @@[m
+           </div>[m
+         </div>[m
+         <div class="min-w-0 flex-auto space-y-2">[m
+[31m-          <.markdown :if={message.role == :assistant} text={message.content} />[m
+[32m+[m[32m          <span :if={message.role == :assistant} class="whitespace-pre-wrap">[m
+[32m+[m[32m            teststatastast  <%= message.content %>[m
+[32m+[m[32m          </span>[m[41m        [m
+[32m+[m[32m          <!--- %<.markdown :if={message.role == :assistant} text={message.content} /> --->[m
+           <span :if={message.role == :user} class="whitespace-pre-wrap">[m
+             <%= message.content %>[m
+           </span>[m
+[1mdiff --git a/mix.exs b/mix.exs[m
+[1mindex a7a5724..45880af 100644[m
+[1m--- a/mix.exs[m
+[1m+++ b/mix.exs[m
+[36m@@ -56,7 +56,8 @@[m [mdefmodule LangChainDemo.MixProject do[m
+       # {:req, "~> 0.3"},[m
+       {:yaml_elixir, "~> 2.11.0"},[m
+       # timezone database[m
+[31m-      {:tzdata, "~> 1.1"}[m
+[32m+[m[32m      {:tzdata, "~> 1.1"},[m
+[32m+[m[32m      #{:logger_file_backend, "~> 0.0.14"}[m
+     ][m
+   end[m
+ [m
+[1mdiff --git a/mix.lock b/mix.lock[m
+[1mindex b5dff48..8ba87b7 100644[m
+[1m--- a/mix.lock[m
+[1m+++ b/mix.lock[m
+[36m@@ -12,7 +12,7 @@[m
+   "earmark_parser": {:hex, :earmark_parser, "1.4.31", "a93921cdc6b9b869f519213d5bc79d9e218ba768d7270d46fdcf1c01bacff9e2", [:mix], [], "hexpm", "317d367ee0335ef037a87e46c91a2269fef6306413f731e8ec11fc45a7efd059"},[m
+   "ecto": {:hex, :ecto, "3.12.5", "4a312960ce612e17337e7cefcf9be45b95a3be6b36b6f94dfb3d8c361d631866", [:mix], [{:decimal, "~> 2.0", [hex: :decimal, repo: "hexpm", optional: false]}, {:jason, "~> 1.0", [hex: :jason, repo: "hexpm", optional: true]}, {:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "6eb18e80bef8bb57e17f5a7f068a1719fbda384d40fc37acb8eb8aeca493b6ea"},[m
+   "ecto_sql": {:hex, :ecto_sql, "3.12.1", "c0d0d60e85d9ff4631f12bafa454bc392ce8b9ec83531a412c12a0d415a3a4d0", [:mix], [{:db_connection, "~> 2.4.1 or ~> 2.5", [hex: :db_connection, repo: "hexpm", optional: false]}, {:ecto, "~> 3.12", [hex: :ecto, repo: "hexpm", optional: false]}, {:myxql, "~> 0.7", [hex: :myxql, repo: "hexpm", optional: true]}, {:postgrex, "~> 0.19 or ~> 1.0", [hex: :postgrex, repo: "hexpm", optional: true]}, {:tds, "~> 2.1.1 or ~> 2.2", [hex: :tds, repo: "hexpm", optional: true]}, {:telemetry, "~> 0.4.0 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "aff5b958a899762c5f09028c847569f7dfb9cc9d63bdb8133bff8a5546de6bf5"},[m
+[31m-  "ecto_sqlite3": {:hex, :ecto_sqlite3, "0.17.5", "fbee5c17ff6afd8e9ded519b0abb363926c65d30b27577232bb066b2a79957b8", [:mix], [{:decimal, "~> 1.6 or ~> 2.0", [hex: :decimal, repo: "hexpm", optional: false]}, {:ecto, "~> 3.12", [hex: :ecto, repo: "hexpm", optional: false]}, {:ecto_sql, "~> 3.12", [hex: :ecto_sql, repo: "hexpm", optional: false]}, {:exqlite, "~> 0.22", [hex: :exqlite, repo: "hexpm", optional: false]}], "hexpm", "3b54734d998cbd032ac59403c36acf4e019670e8b6ceef9c6c33d8986c4e9704"},[m
+[32m+[m[32m  "ecto_sqlite3": {:hex, :ecto_sqlite3, "0.17.6", "d174cfbf25a46f5486d114442091aa4f899adb6261f3ac9bee57c9d46879bb66", [:mix], [{:decimal, "~> 1.6 or ~> 2.0", [hex: :decimal, repo: "hexpm", optional: false]}, {:ecto, "~> 3.12", [hex: :ecto, repo: "hexpm", optional: false]}, {:ecto_sql, "~> 3.12", [hex: :ecto_sql, repo: "hexpm", optional: false]}, {:exqlite, "~> 0.22", [hex: :exqlite, repo: "hexpm", optional: false]}], "hexpm", "942631e88f3c514909a1a8bfeef4a575c45d1dadf3bb85eb9cf0f82fac06092f"},[m
+   "elixir_make": {:hex, :elixir_make, "0.9.0", "6484b3cd8c0cee58f09f05ecaf1a140a8c97670671a6a0e7ab4dc326c3109726", [:mix], [], "hexpm", "db23d4fd8b757462ad02f8aa73431a426fe6671c80b200d9710caf3d1dd0ffdb"},[m
+   "esbuild": {:hex, :esbuild, "0.8.2", "5f379dfa383ef482b738e7771daf238b2d1cfb0222bef9d3b20d4c8f06c7a7ac", [:mix], [{:castore, ">= 0.0.0", [hex: :castore, repo: "hexpm", optional: false]}, {:jason, "~> 1.4", [hex: :jason, repo: "hexpm", optional: false]}], "hexpm", "558a8a08ed78eb820efbfda1de196569d8bfa9b51e8371a1934fbb31345feda7"},[m
+   "expo": {:hex, :expo, "1.1.0", "f7b9ed7fb5745ebe1eeedf3d6f29226c5dd52897ac67c0f8af62a07e661e5c75", [:mix], [], "hexpm", "fbadf93f4700fb44c331362177bdca9eeb8097e8b0ef525c9cc501cb9917c960"},[m
+[36m@@ -22,11 +22,12 @@[m
+   "floki": {:hex, :floki, "0.37.0", "b83e0280bbc6372f2a403b2848013650b16640cd2470aea6701f0632223d719e", [:mix], [], "hexpm", "516a0c15a69f78c47dc8e0b9b3724b29608aa6619379f91b1ffa47109b5d0dd3"},[m
+   "gettext": {:hex, :gettext, "0.26.2", "5978aa7b21fada6deabf1f6341ddba50bc69c999e812211903b169799208f2a8", [:mix], [{:expo, "~> 0.5.1 or ~> 1.0", [hex: :expo, repo: "hexpm", optional: false]}], "hexpm", "aa978504bcf76511efdc22d580ba08e2279caab1066b76bb9aa81c4a1e0a32a5"},[m
+   "hackney": {:hex, :hackney, "1.20.1", "8d97aec62ddddd757d128bfd1df6c5861093419f8f7a4223823537bad5d064e2", [:rebar3], [{:certifi, "~> 2.12.0", [hex: :certifi, repo: "hexpm", optional: false]}, {:idna, "~> 6.1.0", [hex: :idna, repo: "hexpm", optional: false]}, {:metrics, "~> 1.0.0", [hex: :metrics, repo: "hexpm", optional: false]}, {:mimerl, "~> 1.1", [hex: :mimerl, repo: "hexpm", optional: false]}, {:parse_trans, "3.4.1", [hex: :parse_trans, repo: "hexpm", optional: false]}, {:ssl_verify_fun, "~> 1.1.0", [hex: :ssl_verify_fun, repo: "hexpm", optional: false]}, {:unicode_util_compat, "~> 0.7.0", [hex: :unicode_util_compat, repo: "hexpm", optional: false]}], "hexpm", "fe9094e5f1a2a2c0a7d10918fee36bfec0ec2a979994cff8cfe8058cd9af38e3"},[m
+[31m-  "hpax": {:hex, :hpax, "1.0.1", "c857057f89e8bd71d97d9042e009df2a42705d6d690d54eca84c8b29af0787b0", [:mix], [], "hexpm", "4e2d5a4f76ae1e3048f35ae7adb1641c36265510a2d4638157fbcb53dda38445"},[m
+[32m+[m[32m  "hpax": {:hex, :hpax, "1.0.2", "762df951b0c399ff67cc57c3995ec3cf46d696e41f0bba17da0518d94acd4aac", [:mix], [], "hexpm", "2f09b4c1074e0abd846747329eaa26d535be0eb3d189fa69d812bfb8bfefd32f"},[m
+   "httpoison": {:hex, :httpoison, "2.1.0", "655fd9a7b0b95ee3e9a3b535cf7ac8e08ef5229bab187fa86ac4208b122d934b", [:mix], [{:hackney, "~> 1.17", [hex: :hackney, repo: "hexpm", optional: false]}], "hexpm", "fc455cb4306b43827def4f57299b2d5ac8ac331cb23f517e734a4b78210a160c"},[m
+   "idna": {:hex, :idna, "6.1.1", "8a63070e9f7d0c62eb9d9fcb360a7de382448200fbbd1b106cc96d3d8099df8d", [:rebar3], [{:unicode_util_compat, "~> 0.7.0", [hex: :unicode_util_compat, repo: "hexpm", optional: false]}], "hexpm", "92376eb7894412ed19ac475e4a86f7b413c1b9fbb5bd16dccd57934157944cea"},[m
+   "jason": {:hex, :jason, "1.4.4", "b9226785a9aa77b6857ca22832cffa5d5011a667207eb2a0ad56adb5db443b8a", [:mix], [{:decimal, "~> 1.0 or ~> 2.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm", "c5eb0cab91f094599f94d55bc63409236a8ec69a21a67814529e8d5f6cc90b3b"},[m
+   "langchain": {:hex, :langchain, "0.3.0-rc.1", "1a43d04cd0b529e9d1196d4f188cd503019e014dac9d02176c6def6d3ba8a8e2", [:mix], [{:abacus, "~> 2.1.0", [hex: :abacus, repo: "hexpm", optional: false]}, {:ecto, "~> 3.10", [hex: :ecto, repo: "hexpm", optional: false]}, {:gettext, "~> 0.20", [hex: :gettext, repo: "hexpm", optional: false]}, {:nx, ">= 0.7.0", [hex: :nx, repo: "hexpm", optional: true]}, {:req, ">= 0.5.2", [hex: :req, repo: "hexpm", optional: false]}], "hexpm", "85e68daa65ca69a0c2295128194780e49671a711cc556e81b5a747be35e8da57"},[m
+[32m+[m[32m  "logger_file_backend": {:hex, :logger_file_backend, "0.0.14", "774bb661f1c3fed51b624d2859180c01e386eb1273dc22de4f4a155ef749a602", [:mix], [], "hexpm", "071354a18196468f3904ef09413af20971d55164267427f6257b52cfba03f9e6"},[m
+   "metrics": {:hex, :metrics, "1.0.1", "25f094dea2cda98213cecc3aeff09e940299d950904393b2a29d191c346a8486", [:rebar3], [], "hexpm", "69b09adddc4f74a40716ae54d140f93beb0fb8978d8636eaded0c31b6f099f16"},[m
+   "mime": {:hex, :mime, "2.0.6", "8f18486773d9b15f95f4f4f1e39b710045fa1de891fada4516559967276e4dc2", [:mix], [], "hexpm", "c9945363a6b26d747389aac3643f8e0e09d30499a138ad64fe8fd1d13d9b153e"},[m
+   "mimerl": {:hex, :mimerl, "1.3.0", "d0cd9fc04b9061f82490f6581e0128379830e78535e017f7780f37fea7545726", [:rebar3], [], "hexpm", "a1e15a50d1887217de95f0b9b0793e32853f7c258a5cd227650889b38839fe9d"},[m

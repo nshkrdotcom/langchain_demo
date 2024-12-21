@@ -16,6 +16,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    Logger.info("Testing with api_key AIzaSyBRECWaG4mOA7e7fUu9eUARvssssss H0tS3YGt_09013409174091734079134097134029178230891740917430197342091743")
     socket =
       socket
       # fake current_user setup.
@@ -67,7 +68,7 @@ defmodule LangChainDemoWeb.AgentChatLive.Index do
     socket =
       case is_new do
         {:ok, %ChatMessage{} = message} ->
-          Logger.info("*****Handle Event SAVE, msg: #{inspect(message.content, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+          #Logger.info("*****Handle Event SAVE, msg: #{inspect(message.content, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
           socket
         |> add_user_message(message.content)
         |> reset_chat_message_form()
@@ -103,23 +104,49 @@ end
 
   @impl true
   def handle_info({:chat_delta, %LangChain.MessageDelta{} = delta}, socket) do
-    #Logger.info("*****Handling chat delta***********************************************")
+    #Logger.info("*****Handling chat delta***************************")
     try do
       updated_chain = LLMChain.apply_delta(socket.assigns.llm_chain, delta)
-
+      #Logger.info("*****updated chain*********************************")
+      Logger.info("Status: #{case socket.assigns.llm_chain.delta do
+        %LangChain.MessageDelta{status: status} -> status
+        nil -> "nil"
+        _ -> "unexpected structure"
+      end}")
+      Logger.info("Status: #{(socket.assigns.llm_chain.delta && socket.assigns.llm_chain.delta.status) || "no status"}")
+      Logger.info("Delta: #{inspect(socket.assigns.llm_chain.delta)}")
+      #Logger.info("************ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect( socket.assigns.llm_chain, limit: :infinity, pretty: true)}")
+      # socket =
+      #   socket
+      #   |> append_display_message(%ChatMessage{
+      #       role: :assistant,
+      #       hidden: "false",
+      #       content: "foASF af;oj as;ofja s;flja s;lfj ;sflj s;lj o"
+      #       #tool_calls: message.tool_calls,
+      #       #tool_results: message.tool_results
+      #     })
       # Only update the display if the delta completes a message
-      socket =
-        if updated_chain.delta == nil do
-          message = updated_chain.last_message
-          append_display_message(socket, %ChatMessage{
-            role: message.role,
-            content: message.content,
-            tool_calls: message.tool_calls,
-            tool_results: message.tool_results
-          })
-        else
-          socket
-        end
+      # socket
+      # |> append_display_message(%ChatMessage{
+      #   role: :assistant,
+      #   hidden: "false",
+      #   content: "foASF af;oj as;ofja s;flja s;lfj ;sflj s;lj o"
+      #   #tool_calls: message.tool_calls,
+      #   #tool_results: message.tool_results
+      # })
+      # socket =
+      #   if updated_chain.delta == nil do
+      #     Logger.info("*****updated chain***********************************************!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*@)))(_+(@)*$@#)$*@#)$*)@$*)*@$)*")
+      #     message = updated_chain.last_message
+      #     append_display_message(socket, %ChatMessage{
+      #       role: message.role,
+      #       content: message.content,
+      #       tool_calls: message.tool_calls,
+      #       tool_results: message.tool_results
+      #     })
+      #   else
+      #     socket
+      #   end
       #Logger.info("*****Handling chat delta: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
       {:noreply, assign(socket, :llm_chain, updated_chain)}
     catch
@@ -130,6 +157,7 @@ end
   end
 
   def handle_info({:tool_executed, tool_message}, socket) do
+    Logger.info("*****Handling tool messagexxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
     #Logger.info("*****Handling tool message: #{inspect(tool_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     try do
       message = %ChatMessage{
@@ -155,7 +183,7 @@ end
   end
 
   def handle_info({:updated_current_user, updated_user}, socket) do
-    Logger.info("*********************** Trying to handle :updated_current_user")
+    #Logger.info("*********************** Trying to handle :updated_current_user")
     try do
       socket =
         socket
@@ -200,7 +228,7 @@ end
 
   def handle_async(:running_llm, {:ok, {:error, reason}}, socket) do
     error_message = format_error_message(reason)
-    Logger.error("*********************************************************ERROR************************************************ LLM chain error: #{error_message}")
+    #Logger.error("*********************************************************ERROR************************************************ LLM chain error: #{error_message}")
 
     socket =
       socket
@@ -213,7 +241,7 @@ end
 
   def handle_async(:running_llm, {:exit, reason}, socket) do
     error_message = "Chat service error: #{format_error_message(reason)}"
-    Logger.error(error_message)
+    #Logger.error(error_message)
 
     socket =
       socket
@@ -237,7 +265,7 @@ end
         user_text
       )
       when is_binary(user_text) do
-    Logger.info("***** ADD USER MESSSAGE INITIAL: #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    #Logger.info("***** ADD USER MESSSAGE INITIAL: #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     current_user = socket.assigns.current_user
     today = DateTime.now!(current_user.timezone)
 
@@ -264,7 +292,7 @@ User says:
         today: today |> Calendar.strftime("%A, %Y-%m-%d"),
         user_text: user_text
       })
-      Logger.info("***** ADD USER MESSAGE Full Prompt #{inspect(updated_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+      #Logger.info("***** ADD USER MESSAGE Full Prompt #{inspect(updated_message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
       updated_chain =
         llm_chain
         |> LLMChain.add_message(updated_message)
@@ -285,7 +313,7 @@ User says:
 
   def add_user_message(socket, user_text) when is_binary(user_text) do
     # NOT the first message. Submit the user's text as-is.
-    Logger.info("***** ADD USER MESSSAGE (FOLLOWUPS): #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    #Logger.info("***** ADD USER MESSSAGE (FOLLOWUPS): #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     updated_chain = LLMChain.add_message(socket.assigns.llm_chain, Message.new_user!(user_text))
 
     socket
@@ -342,11 +370,11 @@ Before modifying the user's training program, summarize the change and confirm t
         },
         verbose: false
       })
-      |> LLMChain.add_tools(UpdateCurrentUserFunction.new!())
-      |> LLMChain.add_tools(FitnessLogsTool.new_functions!())
+      #|> LLMChain.add_tools(UpdateCurrentUserFunction.new!())
+      #|> LLMChain.add_tools(FitnessLogsTool.new_functions!())
       |> LLMChain.add_message(Message.new_system!(system_prompt_text))
 
-    Logger.info("***** [defp assign_llm_chain(socket) do] Created and assigned the LLM chain, system prompt set, set up the connection to the provider!")#" #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    #Logger.info("***** [defp assign_llm_chain(socket) do] Created and assigned the LLM chain, system prompt set, set up the connection to the provider!")#" #{inspect(user_text, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
 
     socket
     |> assign(:llm_chain, llm_chain)
@@ -401,17 +429,26 @@ Before modifying the user's training program, summarize the change and confirm t
         :llm_chain,
         LLMChain.add_llm_callback(socket.assigns.llm_chain, %{
           on_llm_new_delta: fn _model, delta ->
+            #message = result.last_message
+            # append_display_message(socket, %ChatMessage{
+            #   role: :assistant,
+            #   content: "foo"
+            #   #tool_calls: message.tool_calls,
+            #   #tool_results: message.tool_results
+            # })
+            #Logger.info("*****DELTA RECEIVE########################################################################## ")
             #Logger.info("*****DELTA RECEIVED: #{inspect(delta, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
             send(live_view_pid, {:chat_delta, delta})
             :ok
           end,
           on_llm_new_message: fn _model, message ->
+            #Logger.info("*****new message cereived ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
             #Logger.info("*****NEW MESSAGE RECEIVED: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
             send(live_view_pid, {:tool_executed, message})
             :ok
           end,
           on_llm_token_usage: fn _model, usage ->
-            #Logger.info("*****TOKEN USAGE: #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+            Logger.info("*****TOKEN USAGE: #{inspect(usage, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
             :ok
           end,
           on_llm_ratelimit_info: fn _model, rate_limit ->
@@ -427,12 +464,21 @@ Before modifying the user's training program, summarize the change and confirm t
       result = LLMChain.run(chain, while_needs_response: true)
       Logger.info("*****LLMChain.run result: #{inspect(result, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
 
+
+      # append_display_message(socket, %ChatMessage{
+      #   role: :assistant,
+      #   hidden: true,
+      #   content:
+      #     "TRYINGT TO GET THIS TO WORK"
+      # })
+
       case result do
         {:ok, _updated_chain} ->
+          #
           Logger.info("*****Chain completed successfully")
           :ok
         {:error, reason} ->
-          Logger.error("Chain error: #{inspect(reason)}")
+          #Logger.error("Chain error: #{inspect(reason)}")
           {:error, format_error_message(reason)}
         unexpected ->
           Logger.error("Unexpected chain response: #{inspect(unexpected)}")
@@ -446,23 +492,27 @@ Before modifying the user's training program, summarize the change and confirm t
   defp format_error_message(reason), do: inspect(reason)
 
   defp reset_chat_message_form(socket) do
-    # Logger.info("*****resetting chat mssage form!!***********************")
+    #Logger.info("*****resetting chat mssage form!!***********************")
     changeset = ChatMessage.create_changeset(%{})
     assign_form(socket, changeset)
   end
 
   defp append_display_message(socket, %ChatMessage{} = message) do
-    #Logger.info("(************************************ append_display_message!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    #Logger.info("(************************************ append_display_mesage!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect( message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
+    #Logger.info("(************************************ append_display_mesage!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect(message, limit: Application.get_env(:langchain_demo, :io_inspect_limit, :infinity), pretty: true)}")
     assign(socket, :display_messages, socket.assigns.display_messages ++ [message])
+    #Logger.info("(************************************ append_display_essage!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect( socket.assigns, limit: :infinity, pretty: true)}")
+    #Logger.info("(************************************ append_display_essage!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: #{inspect( socket.assigns.display_messages, limit: :infinity, pretty: true)}")
+    #socket
   end
 
   defp set_loading(socket) do
-    Logger.info("!!!!!!!!!! Loading ON !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    #Logger.info("!!!!!!!!!! Loading ON !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     assign(socket, :is_loading, true)
   end
 
   defp clear_loading(socket) do
-    Logger.info("!!!!!!!!!! Loading off!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    #Logger.info("!!!!!!!!!! Loading off!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     assign(socket, :is_loading, false)
   end
 end
